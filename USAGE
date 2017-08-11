@@ -1,0 +1,1 @@
+python gem5-auto.py -g /home/mw9g09/gem5-repo/gem5/ --preset-list "mibenchA,mibenchB" --model bko --freq '1000-1000'

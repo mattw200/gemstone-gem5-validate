@@ -125,10 +125,11 @@ def create_rcs_from_preset(workloads_df_path, xu3_data_path, cpu_mask, preset, o
     names_to_include = presets[preset]
     create_rcs(workloads_df, names_to_include, cpu_mask, preset, output_file)
     accum = 0
+    print("Creating bootscript: "+preset+"  ("+cpu_mask+")")
     for name in names_to_include:
-        time = get_workload_time(xu3_file_path, name)
+        time = get_workload_time(xu3_data_path, name)
         accum += time
-        print(name+"\t\t\ttime:"+str(get_workload_time)+"\t\t\t\taccum:"+str(accum))
+        print(name+"\t\t\ttime:"+str(time)+"\t\t\t\taccum:"+str(accum))
 
 def get_workload_time(xu3_file_path, workload_name):
     # This is the most inefficient piece  of code ever written
@@ -186,6 +187,8 @@ def create_rcs(workloads_df, names_to_include, cpu_mask, preset, output_file):
     output_text += '/sbin/m5 dumpstats\n'
     output_text += 'echo "-----POWMON WORKLOAD COMPLETE : ' \
                 +'sleep 1 : na "\n\n'
+
+    output_text += 'echo "-----POWMON FINISHED BOOTSCRIPT"\n\n'
 
     output_text += '/sbin/m5 exit\n\n'
 

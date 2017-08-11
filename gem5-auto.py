@@ -31,10 +31,10 @@ freqs_dict = {
 models_list = ['bko']
 
 def create_iridis_run_script(checkpoint_dir, little_clock, big_clock, bootscript_path, m5out_dir, wall_hours, run_script_filepath):
-    if wall_hours >= 60:
-        raise ValueError("Wall time must be less than 60")
+    if int(wall_hours) >= 60:
+        raise ValueError("Wall time ("+str(int(wall_hours))+" must be less than 60")
     script_text = "#!/bin/bash\n"
-    script_text += "#PBS -l walltime="+str(int(wall_hours))+":00:00\n"
+    script_text += "#PBS -l walltime={0:0>2}".format(int(wall_hours))+":00:00\n"
     script_text += "#PBS -m ae -M mw9g09@ecs.soton.ac.uk\n"
     script_text += "module load python\n"
     script_text += "module load gcc/4.9.1\n"
@@ -51,6 +51,10 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-g', dest='gem5_dir', required=True, \
                help="The gem5 directory")
+    parser.add_argument('--hours', dest='hours', required=False, \
+               help="Wall time (hours)")
+    parser.add_argument('--clean', dest='clean',action='store_true', required=False, \
+               help="Cleans")
     parser.add_argument('--preset-list', dest='preset_list', required=True, \
             help="List of which presets to use. Available presets: " \
             +str(create_bootscript.get_presets()))
@@ -62,6 +66,35 @@ if __name__=='__main__':
             +str(freqs_dict))
     args=parser.parse_args()
 
+    if not args.hours:
+        args.hours = 58
+
+    gem5_auto_dir = os.path.join(args.gem5_dir, 'gem5-auto')
+    bootscripts_dir = os.path.join(gem5_auto_dir, 'bootscripts')
+    runscripts_dir = os.path.join(gem5_auto_dir, 'runscripts')
+
+    if not os.path.exists(gem5_auto_dir):
+        os.makedirs(gem5_auto_dir)    
+    if not os.path.exists(bootscripts_dir):
+        os.makedirs(bootscripts_dir)    
+    if not os.path.exists(runscripts_dir):
+        os.makedirs(runscripts_dir)    
+
+    if args.clean:
+        import shutil
+        import sys
+        print("Will remove: "+gem5_auto_dir)
+        raw_input("Press Enter to continue...")
+        shutil.rmtree(gem5_auto_dir) 
+        run_all_files = [x for x in os.listdir(args.gem5_dir) if x.startswith('run-all-') and x.endswith('.sh')]
+        print("About to delete the following files:")
+        print(run_all_files)
+        raw_input("Press Enter to continue...")
+        for run_file in run_all_files:
+            os.remove(os.path.join(args.gem5_dir, run_file))
+        print("Nice and clean")
+        sys.exit()
+        
     # automatically does for big and little
     # use consistent nameing
     # gem5/gem5-auto/
@@ -78,17 +111,6 @@ if __name__=='__main__':
     '''
     python create_bootscript.py --list ../workloads-small.config.armv7 --mask 4,5,6,7 --xu3-results ../../powmon-experiment-060-high-f/pmc-events-log.out-analysed.csv  --preset "parmibench"
     '''
-    gem5_auto_dir = os.path.join(args.gem5_dir, 'gem5-auto')
-    bootscripts_dir = os.path.join(gem5_auto_dir, 'bootscripts')
-    runscripts_dir = os.path.join(gem5_auto_dir, 'runscripts')
-    
-    if not os.path.exists(gem5_auto_dir):
-        os.makedirs(gem5_auto_dir)    
-    if not os.path.exists(bootscripts_dir):
-        os.makedirs(bootscripts_dir)    
-    if not os.path.exists(runscripts_dir):
-        os.makedirs(runscripts_dir)    
-
     this_file_dir = dir_path = os.path.dirname(os.path.realpath(__file__))
     workload_list_filepath = os.path.join(this_file_dir, '../workloads-small.config.armv7')
     xu3_results_filepath = os.path.join(this_file_dir, 'xu3-results.example.csv')
@@ -102,12 +124,12 @@ if __name__=='__main__':
     f.closed
 
     run_all_script  = "#!/bin/bash\n"
-    for preset in args.presets:
+    for preset in args.preset_list:
         #for big and for little
         preset = preset.strip()
-        cores_masks = ['0,1,2,3','4,5,6,7']
+        core_masks = ['0,1,2,3','4,5,6,7']
         for mask in core_masks:
-            filename_prefixes = experiment_label+'-'+args.model+'-'+args.freq+'-'+mask.replace('-','_')+preset
+            filename_prefixes = experiment_label+'-'+args.model+'-'+args.freq+'-'+mask.replace('-','_')+'-'+preset
             bootscript_filepath = os.path.join(bootscripts_dir,filename_prefixes+'.rcS')
             runscript_filepath = os.path.join(runscripts_dir, filename_prefixes+'.sh')
             m5out_dir_path = os.path.join(args.gem5_dir, 'gem5out-'+filename_prefixes)
@@ -118,11 +140,11 @@ if __name__=='__main__':
                     freqs_dict[args.freq]['a15_freq'],
                     bootscript_filepath,
                     m5out_dir_path,
-                    58,
+                    args.hours,
                     runscript_filepath
                 )
             run_all_script += "qsub "+runscript_filepath+"\n"
-    with open(os.path.join(args.gem5_dir, 'run-all-'+experiment_label), 'w') as f:
+    with open(os.path.join(args.gem5_dir, 'run-all-'+experiment_label+'.sh'), 'w') as f:
         f.write(run_all_script)
     f.closed
 
