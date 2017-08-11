@@ -47,7 +47,6 @@ def create_iridis_run_script(checkpoint_dir, little_clock, big_clock, bootscript
 
 if __name__=='__main__':
     import argparse
-    import pandas
     import os
     parser = argparse.ArgumentParser()
     parser.add_argument('-g', dest='gem5_dir', required=True, \
@@ -67,6 +66,8 @@ if __name__=='__main__':
     # use consistent nameing
     # gem5/gem5-auto/
     # g5-out-XXX-bko-1000-1400-4_5_6_7-mibenchA
+
+    args.preset_list = args.preset_list.split(',')
 
     if not args.model in models_list:
         print("Error: "+args.model+" not in models list")
@@ -101,8 +102,9 @@ if __name__=='__main__':
     f.closed
 
     run_all_script  = "#!/bin/bash\n"
-    for preset in presets:
+    for preset in args.presets:
         #for big and for little
+        preset = preset.strip()
         cores_masks = ['0,1,2,3','4,5,6,7']
         for mask in core_masks:
             filename_prefixes = experiment_label+'-'+args.model+'-'+args.freq+'-'+mask.replace('-','_')+preset
