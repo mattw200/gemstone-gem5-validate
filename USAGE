@@ -1,1 +1,8 @@
 python gem5-auto.py -g /home/mw9g09/gem5-repo/gem5/ --preset-list "mibenchA,mibenchB" --model bko --freq '1000-1000'
+
+python gem5-auto.py -g /home/mw9g09/gem5-repo/gem5/ --preset-list "mibenchA,mibenchB,parsec4A,parsec4B,parsec1A,parsec1B,lmbench,parmibench,misc" --model bko --freq '1000-1000' --hours 58
+
+python gem5-auto.py -g /home/mw9g09/gem5-repo/gem5/ --preset-list "mibenchA,mibenchB,parsec4A,parsec4B,parsec1A,parsec1B,lmbench,parmibench,misc,roy" --model bko --freq '600-600' --hours 58
+
+
+python gem5-auto.py -g /home/mw9g09/gem5-repo/gem5/ --preset-list "mibenchA,mibenchB,parsec4A,parsec4B,parsec1A,parsec1B,lmbench,parmibench,misc,roy" --model bko --freq '1400-1800' --hours 58

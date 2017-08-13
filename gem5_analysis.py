@@ -59,8 +59,8 @@ def stats_to_df(path_to_stats_file):
         if not results:
             continue
         # add workload/dump (temporary) name
-        results['ordered_headers'].insert(0, 'workload name') 
-        results['stats']['workload name'] = temp_workload_name
+        results['ordered_headers'].insert(0, 'workload name temp') 
+        results['stats']['workload name temp'] = temp_workload_name
         if not is_df_set_up:
             stats_df = pd.DataFrame(columns=results['ordered_headers'])
             is_df_set_up = True
@@ -87,22 +87,127 @@ def apply_stat_equations_from_file(stats_df, path_to_equation_file):
     for i in range(0, len(equations_df.index)):
         print("Applying equation "+str(i)+": "+str(equations_df['Equation'].iloc[i]))
         apply_new_stat(stats_df, equations_df['Stat Name'].iloc[i], equations_df['Equation'].iloc[i])
+
+def get_experiment_number_from_full_directory_path(path):
+    import os
+    dir_name =  os.path.basename(os.path.normpath(path))
+    if dir_name.startswith('gem5out-'):
+        return int(dir_name.split('-')[1])
+    else:
+        return None
     
+def get_experiment_directories(top_search_dir, experiment_numers):
+    import os
+    # check experiment numbers have been converted to ints:
+    experiment_numers = [int(x) for x in experiment_numers]
+    #match_dirs = [x[0] for x in os.walk(top_search_dir) if os.path.basename(os.path.normpath(x[0])).find('gem5out-'+experiment_number_string) > -1]
+    match_dirs = [x[0] for x in os.walk(top_search_dir) \
+           if get_experiment_number_from_full_directory_path(x[0]) in experiment_numers ]
+    print ("The folling directories match:")
+    print match_dirs
+    return match_dirs
+
+def get_info_from_terminal_out(terminal_out_filepath):
+    lines = []
+    with open(terminal_out_filepath, 'r') as f:
+        lines = f.read().split('\n')
+    f.closed
+    workloads_start = []
+    workloads_complete = []
+    workload_masks = []
+    info = {}
+    for line in lines:
+        if line.find('-----POWMON PRESET') > -1:
+            info['preset'] = line.split(':')[1].strip()
+        elif line.find('-----POWMON WORKLOAD COMPLETE') > -1:
+            workloads_complete.append(line.split(':')[1].strip())
+            workload_masks.append(line.split(':')[2].strip())
+        elif line.find('-----POWMON WORKLOAD START') > -1:
+            workloads_start.append(line.split(':')[1].strip())
+    info['workloads complete'] = workloads_complete
+    info['workloads start'] = workloads_start
+    info['masks'] = workload_masks
+    return info
+
+
+def analyse_gem5_results(
+          top_search_directory,
+          experiment_numbers_list,
+          stats_formulae_filepath
+          ):
+    import os
+    gem5outs_to_process = get_experiment_directories(top_search_directory,\
+           experiment_numbers_list)
+    stats_dfs = []
+    for dir_i in range(0, len(gem5outs_to_process)):
+        stats_file = os.path.join(gem5outs_to_process[dir_i],'stats.txt')    
+        terminal_out_file = os.path.join(gem5outs_to_process[dir_i],'system.terminal')
+        terminal_out_info = get_info_from_terminal_out(terminal_out_file)
+        print("Analysing experiment: "+gem5outs_to_process[dir_i])
+        print("Benchmark preset: "+str(terminal_out_info['preset']))
+        print("Workloads (complete): "+str(terminal_out_info['workloads complete']))
+        print("Masks (complete): "+str(terminal_out_info['masks']))
+        print("WARNING: incomplete workloads: "+str([x for x in terminal_out_info['workloads start'] if x not in terminal_out_info['workloads complete']]))
+        stats_df = stats_to_df(stats_file)
+        row_count = len(stats_df.index)
+        experiment_name = os.path.basename(os.path.normpath(gem5outs_to_process[dir_i]))
+        # add the stats:
+        # 1) experiment number (from dir name)
+        # 2) model name
+        # 2) workload name
+        # 3) core mask
+        # 4) a7 and a15 freq (from dir name)
+        # 4) preset name
+        # full experiment dir
+        experiment_number = [ int(experiment_name.split('-')[1]) ]*row_count
+        model_name = [ experiment_name.split('-')[2] ]*row_count
+        a7_freq_mhz = [ int(experiment_name.split('-')[3]) ]*row_count
+        a15_freq_mhz = [ int(experiment_name.split('-')[4]) ]*row_count
+        preset = [ terminal_out_info['preset'] ]*row_count
+        experiment_dirname = [ experiment_name ]*row_count
+        stats_df.insert(0, 'A15 Freq (MHz)', a15_freq_mhz)
+        stats_df.insert(0, 'A7 Freq (MHz)', a7_freq_mhz)
+        #stats_df.insert(0, 'core mask', terminal_out_info['masks'])
+        #stats_df.insert(0, 'workload name', terminal_out_info['workloads complete'])
+        stats_df.insert(0, 'workloads preset', preset)
+        stats_df.insert(0, 'model name', model_name)
+        stats_df.insert(0, 'experiment number', experiment_number)
+        print stats_df
+        print stats_df['workload name temp']
+        print stats_df['sim_seconds']
+        print terminal_out_info['workloads complete']
+        print "DF rows: "+str(len(stats_df.index))
+        print "Workload rows: "+str(len(terminal_out_info['workloads complete']))
+        pudding
         
+        
+# give it a directory, give it an experiment number (then recursively goes
+# through all the directories looking for gem5out directories matching 
+# that experiment number). 
+# Then derivces experiment details and adds to DF:
+#   - experiment number
+#   - date/time run
+#   - a7 and a15 frequency
+#   - benchmark suite (preset name)
+#   - workload name
+#   - checkpoint name (for checking/debug)
+#   - core mask
+#   - benchmark suite (actual)
         
 
 if __name__=='__main__':
     import argparse
     import os
     parser = argparse.ArgumentParser()
-    parser.add_argument('--m5out-dir', dest='gem5_out_dir', required=True, \
-               help="The gem5 m5out directory")
-    '''
-    parser.add_argument('--powmon_dir', dest='powmon_out_dir', required=True, \
-               help="The powmon experiment output directory")
-    '''
+    parser.add_argument('--results-dir', dest='results_dir', required=True, \
+               help="The directory in which to search for results directories recursively")
+    parser.add_argument('--experiments', dest='experiment_numbers', required=True, \
+               help="A list of experiment numbers of the experiments to include. E.g. '19,20,21'")
     args=parser.parse_args()
-    stats_filepath = os.path.join(args.gem5_out_dir, 'stats.txt')
+    args.experiment_numbers = args.experiment_numbers.split(',')
+    analyse_gem5_results(args.results_dir, args.experiment_numbers,'stats.equations')
+    banananannanana
+    stats_filepath = os.path.join(args.results_dir, 'stats.txt')
     stats_df = stats_to_df(stats_filepath)
     test_eqn = "sim_milliseconds = sim_seconds*1000.0"
     #apply_new_stat(stats_df, "g5_stat_", " new_name", test_eqn)
