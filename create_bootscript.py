@@ -111,6 +111,15 @@ presets['parsec1B'] = [
     'parsec-dedup-1'
 ]
 
+presets['roy'] = [
+    'rl-busspeed-small',
+    'rl-dhrystone-small',
+    'rl-linpack-small',
+    'rl-linpack-FSSP-small',
+    'rl-linpack-neon-small',
+    'rl-whetstone-small'
+]
+
 def get_presets():
     keys = []
     for key in presets:
