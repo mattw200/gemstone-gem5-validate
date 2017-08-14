@@ -1,2 +1,2 @@
 Stat Name	Equation
-sim_milliseconds_3	sim_seconds*1000.0
+newstat milliseconds_3	sim_seconds*1000.0

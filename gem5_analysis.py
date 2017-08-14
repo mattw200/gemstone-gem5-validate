@@ -129,11 +129,14 @@ def get_info_from_terminal_out(terminal_out_filepath):
     info['masks'] = workload_masks
     return info
 
+   
+
 
 def analyse_gem5_results(
           top_search_directory,
           experiment_numbers_list,
-          stats_formulae_filepath
+          stats_formulae_filepath,
+          output_filename
           ):
     import os
     gem5outs_to_process = get_experiment_directories(top_search_directory,\
@@ -165,22 +168,46 @@ def analyse_gem5_results(
         a15_freq_mhz = [ int(experiment_name.split('-')[4]) ]*row_count
         preset = [ terminal_out_info['preset'] ]*row_count
         experiment_dirname = [ experiment_name ]*row_count
+        masks = terminal_out_info['masks']
+        workloads_complete = terminal_out_info['workloads complete']
+        # NOTE: add workload and mask because of the random extra entry
+        # Another note: THERE IS ONLY AN EXTRA WORKLOAD IF ALL WORKLOADS COMPLETE
+        if False:
+            print("Length of index:"+str(len(stats_df.index)))
+            print("Length of workload names:"+str(len(workloads_complete)))
+            print("stats_df workloads:")
+            print(stats_df['workload name temp'])
+            print("stats_df times:")
+            print(stats_df['sim_seconds'])
+            print("workloads complete: ")
+            print workloads_complete
+        if not len(stats_df.index) == len(workloads_complete):
+            workloads_complete.append("NA")
+            masks.append("NA")
+        stats_df.insert(0, 'm5out directory', experiment_name)
         stats_df.insert(0, 'A15 Freq (MHz)', a15_freq_mhz)
         stats_df.insert(0, 'A7 Freq (MHz)', a7_freq_mhz)
-        #stats_df.insert(0, 'core mask', terminal_out_info['masks'])
-        #stats_df.insert(0, 'workload name', terminal_out_info['workloads complete'])
+        stats_df.insert(0, 'core mask', masks)
+        stats_df.insert(0, 'workload name', workloads_complete)
         stats_df.insert(0, 'workloads preset', preset)
         stats_df.insert(0, 'model name', model_name)
-        stats_df.insert(0, 'experiment number', experiment_number)
-        print stats_df
-        print stats_df['workload name temp']
-        print stats_df['sim_seconds']
-        print terminal_out_info['workloads complete']
-        print "DF rows: "+str(len(stats_df.index))
-        print "Workload rows: "+str(len(terminal_out_info['workloads complete']))
-        pudding
-        
-        
+        stats_dfs.append(stats_df) 
+        # TODO check for duplicates and missing data
+        # e.g. check that the same workload,freq,mask combo isn't
+        # in two experiments.
+        # And check that one freq/mask isn't missing a workload the
+        # other one has. 
+    # now concatinate stats
+    results_df = stats_dfs[0]
+    for i in range(1, len(stats_dfs)):
+        results_df = results_df.append(stats_dfs[i])
+    print results_df
+    # in old versions of pandas the cols get mixed up
+    results_df = results_df[stats_dfs[0].columns.values]
+    # now apply equations:
+    apply_stat_equations_from_file(results_df, 'stats.equations')
+    results_df.to_csv(output_filename, sep='\t')
+
 # give it a directory, give it an experiment number (then recursively goes
 # through all the directories looking for gem5out directories matching 
 # that experiment number). 
@@ -193,7 +220,6 @@ def analyse_gem5_results(
 #   - checkpoint name (for checking/debug)
 #   - core mask
 #   - benchmark suite (actual)
-        
 
 if __name__=='__main__':
     import argparse
@@ -203,9 +229,12 @@ if __name__=='__main__':
                help="The directory in which to search for results directories recursively")
     parser.add_argument('--experiments', dest='experiment_numbers', required=True, \
                help="A list of experiment numbers of the experiments to include. E.g. '19,20,21'")
+    parser.add_argument('-o', '--output-file', dest='output_file', required=False)
     args=parser.parse_args()
+    if not args.output_file:
+        args.output_file = 'temp.csv'
     args.experiment_numbers = args.experiment_numbers.split(',')
-    analyse_gem5_results(args.results_dir, args.experiment_numbers,'stats.equations')
+    analyse_gem5_results(args.results_dir, args.experiment_numbers,'stats.equations', args.output_file)
     banananannanana
     stats_filepath = os.path.join(args.results_dir, 'stats.txt')
     stats_df = stats_to_df(stats_filepath)

@@ -58,6 +58,26 @@ presets['parmibench'] = [
     'par-dijkstra-mqueue'
 ]
 
+presets['parmibenchA'] = [
+    'par-basicmath-square-small',
+    'par-basicmath-cubic-small',
+    'par-basicmath-rad2deg-small',
+    'par-bitcount'
+]
+
+presets['parmibenchB'] = [
+    'par-patricia',
+    'par-stringsearch-small',
+    'par-sha',
+    'par-dijkstra-mqueue'
+]
+
+presets['parmibenchC'] = [
+    'par-susan-smoothing',
+    'par-susan-edges',
+    'par-susan-corners'
+]
+
 presets['lmbench'] = [
     'lmb3-lat-ctx-0-18',
     'lmb3-lat-ctx-500-18',
