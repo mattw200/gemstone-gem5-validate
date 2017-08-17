@@ -56,8 +56,8 @@ def compare_two_stats(stats_df, stat_A_name, stat_B_name):
 def apply_new_stat(df, stat_name, equation):
     import pandas as pd
     #df.eval(stat_name+' = '+equation,inplace=True)
-    print df['xu3 stat duration (s)']
     #df['new'] = pd.eval("df['xu3 stat duration (s)'] * 1000.0" )
+    print ("Adding new stat: "+stat_name+" with formula: "+equation)
     df[stat_name] = pd.eval(equation,engine='python')
 
 def apply_formulae(df, formulae_file_path):
@@ -83,11 +83,11 @@ if __name__=='__main__':
     old_cols = df.columns.values.tolist()
     apply_formulae(df,'gem5-stats.equations')
     
-    important_cols = ['xu3 stat workload name','xu3 stat core mask','xu3 stat duration mean (s)','xu3 stat duration SD (s)','xu3 stat duration (s)', 'xu3 stat Freq (MHz) C0','xu3 stat Freq (MHz) C4', 'gem5 stat model name',	'gem5 stat workloads preset',	'gem5 stat workload name',	'gem5 stat core mask',	'gem5 stat A7 Freq (MHz)',	'gem5 stat A15 Freq (MHz)',	'gem5 stat m5out directory','gem5 stat sim_seconds']
+    important_cols = ['xu3 stat workload name', 'xu3 stat iteration index', 'xu3 stat core mask','xu3 stat duration mean (s)','xu3 stat duration SD (s)','xu3 stat duration (s)', 'xu3 stat Freq (MHz) C0','xu3 stat Freq (MHz) C4', 'gem5 stat model name',	'gem5 stat workloads preset',	'gem5 stat workload name',	'gem5 stat core mask',	'gem5 stat A7 Freq (MHz)',	'gem5 stat A15 Freq (MHz)',	'gem5 stat m5out directory','gem5 stat sim_seconds']
     
     new_cols_only = [x for x in df.columns.values if x not in old_cols]
     condensed_df = df[important_cols + new_cols_only]
-    print df[new_cols_only]
+    print df[important_cols + new_cols_only]
     condensed_df.to_csv('condensed.csv',sep='\t')
-    find_stats_per_group(df)
+    #find_stats_per_group(df)
     

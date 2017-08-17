@@ -18,6 +18,9 @@ gem5_col_prefix = 'gem5 stat '
 def combine_xu3_and_gem5(xu3_df, gem5_df, model):
     import pandas as pd
 
+    # filter
+    gem5_df = gem5_df[gem5_df['gem5 stat workloads preset'] != 'parmibench'] # parmibench replaced by parmibenchA, parmibenchB, and parmibenchC
+
     # remove unwanted columns from xu3_df:
     xu3_wanted_cols = [col for col in xu3_df.columns.values if not col.find("Unnamed:") > -1]
     xu3_df = xu3_df[xu3_wanted_cols]

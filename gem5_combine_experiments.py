@@ -66,6 +66,8 @@ def get_experiment_number_from_full_directory_path(path):
     import os
     dir_name =  os.path.basename(os.path.normpath(path))
     if dir_name.startswith('gem5out-'):
+        if not dir_name.split('-')[1].isdigit():
+            return None
         return int(dir_name.split('-')[1])
     else:
         return None
@@ -103,9 +105,6 @@ def get_info_from_terminal_out(terminal_out_filepath):
     info['masks'] = workload_masks
     return info
 
-   
-
-
 def analyse_gem5_results(
           top_search_directory,
           experiment_numbers_list,
@@ -125,6 +124,9 @@ def analyse_gem5_results(
         print("Workloads (complete): "+str(terminal_out_info['workloads complete']))
         print("Masks (complete): "+str(terminal_out_info['masks']))
         print("WARNING: incomplete workloads: "+str([x for x in terminal_out_info['workloads start'] if x not in terminal_out_info['workloads complete']]))
+        if len(terminal_out_info['workloads complete']) == 0:
+            print("Scipping this experiment as no workloads were completed")
+            continue
         stats_df = stats_to_df(stats_file)
         row_count = len(stats_df.index)
         experiment_name = os.path.basename(os.path.normpath(gem5outs_to_process[dir_i]))
@@ -179,7 +181,7 @@ def analyse_gem5_results(
     # in old versions of pandas the cols get mixed up
     results_df = results_df[stats_dfs[0].columns.values]
     # now apply equations:
-    apply_stat_equations_from_file(results_df, 'stats.equations')
+    #apply_stat_equations_from_file(results_df, 'stats.equations') # NOTE: NOW APPLIES FORMULAE AFTER COMBINING WITH XU3
     results_df.to_csv(output_filename, sep='\t')
 
 # give it a directory, give it an experiment number (then recursively goes
