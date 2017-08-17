@@ -4,13 +4,6 @@
 # Created: 31 July 2017
 
 # Framework for analysing gem5 stats
-
-def apply_new_stat(stats_df, stat_name, equation):
-    stats_df.eval(stat_name+' = '+equation)
-    
-def compare_two_stats(stats_df, stat_A_name, stat_B_name):
-    stats_df['comp. '+stat_A_name+' vs. '+stat_B_name+' (%)'] = \
-            (((stats_df[stat_A_name] - stats_df[stat_B_name]).abs()) / stats_df[stat_A_name]) * 100.0
     
 def process_gem5_dump(dump_text):
     stats_lines = dump_text.split('\n')
@@ -68,25 +61,6 @@ def stats_to_df(path_to_stats_file):
         stats_df = stats_df.append(temp_row, ignore_index=True)
     return stats_df
 
-# TODO apply a list of workload names (in the m5out dir) to the stats
-def apply_workload_names_to_stats():
-    pass
-
-def apply_stat_equations_from_file(stats_df, path_to_equation_file):
-    '''
-    equation_lines = []
-    with open(path_to_equation_file, 'r') as f:
-        equation_lines = f.read().split('\n')
-    f.closed
-    for i in range(0, len(equation_lines)):
-    '''
-    import pandas as pd
-    equations_df = pd.read_csv(path_to_equation_file, sep='\t')
-    print("Applying the following equations:")
-    print equations_df
-    for i in range(0, len(equations_df.index)):
-        print("Applying equation "+str(i)+": "+str(equations_df['Equation'].iloc[i]))
-        apply_new_stat(stats_df, equations_df['Stat Name'].iloc[i], equations_df['Equation'].iloc[i])
 
 def get_experiment_number_from_full_directory_path(path):
     import os

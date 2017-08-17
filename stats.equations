@@ -1,2 +1,0 @@
-Stat Name	Equation
-newstat milliseconds_3	sim_seconds*1000.0

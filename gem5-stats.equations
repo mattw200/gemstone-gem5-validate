@@ -1,0 +1,6 @@
+Stat Name	Equation
+newstat gem5 time	df['gem5 stat sim_seconds']
+newstat xu3 time	df['xu3 stat duration (s)']
+newstat time diff	(df['xu3 stat duration (s)'] - df['gem5 stat sim_seconds'])
+newstat time diff abs	df['newstat time diff'].abs()
+newstat time pc err	(df['newstat time diff abs'] / df['xu3 stat duration (s)'])*100.0
