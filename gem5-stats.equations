@@ -10,3 +10,6 @@ xu3new little avg cycle count rate	(df['xu3 stat CPU 0 (id:0x07) cycle count rat
 xu3new big avg cycle count rate	(df['xu3 stat CPU 4 (id:0x0F) cycle count rate'] + df['xu3 stat CPU 5 (id:0x0F) cycle count rate'] + df['xu3 stat CPU 6 (id:0x0F) cycle count rate'] + df['xu3 stat CPU 7 (id:0x0F) cycle count rate'])/4.0
 xu3new little utilisation	(df['xu3new little avg cycle count rate'] / (df['xu3new clock tick rate C0']))*100.0
 xu3new big utilisation	(df['xu3new big avg cycle count rate'] / df['xu3new clock tick rate C4'])*100.0
+xu3new little util check	(df['a7 cycle count avg rate'] / df['xu3new clock tick rate C0']*100.0)
+xu3new big util check	(df['a15 cycle count avg rate'] / df['xu3new clock tick rate C4'])*100.0
+xu3new big cycle count	df['a15 cycle count avg rate']

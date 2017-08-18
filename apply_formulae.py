@@ -70,6 +70,45 @@ def apply_formulae(df, formulae_file_path):
         apply_new_stat(df, equations_df['Stat Name'].iloc[i], equations_df['Equation'].iloc[i])
     return df
 
+def create_xu3_cluster_average(df):
+   # find cols to average
+   # TODO: filter so that it only looks at the columns where the A7/A15 is being used (i.e. filter
+   # on the core mask). Then raise an exception if it finds more than four columns for the same PMC
+   # A7:
+    a7_pmcs = [ x[x.find('(0')+1: x.find('(0')+5] for x in df.columns.values \
+             if x.find("cntr") > -1 and x.find('CPU 0') > -1 and x.find('diff') > -1 ]
+    # A15
+    a15_pmcs = [ x[x.find('(0')+1: x.find('(0')+5] for x in df.columns.values \
+             if x.find("cntr") > -1 and x.find('CPU 4') > -1 and x.find('diff') > -1 ]
+    if not all(d == 1 for d in  [a7_pmcs.count(x) for x in a7_pmcs]):
+        raise ValueError("Duplicate pmcs for a7_pmcs: "+str(a7_pmcs))
+    if not all(d == 1 for d in  [a15_pmcs.count(x) for x in a15_pmcs]):
+        raise ValueError("Duplicate pmcs for a15_pmcs: "+str(a15_pmcs))
+
+    # add cycle count average
+    a7_cycle_counts = [x for x in df.columns.values if x.find('cycle count') > -1 and (x.find('CPU 0') > -1 or x.find('CPU 1') > -1 or x.find('CPU 2') > -1 or x.find('CPU 3') > -1) ]
+    if len(a7_cycle_counts) != 8:
+        raise ValueError("len of a7_cycle_counts is not 8! a7_cycle_counts: "+str(a7_cycle_counts))
+    a15_cycle_counts = [x for x in df.columns.values if x.find('cycle count') > -1 and (x.find('CPU 4') > -1 or x.find('CPU 5') > -1 or x.find('CPU 6') > -1 or x.find('CPU 7') > -1) ]
+    if len(a15_cycle_counts) != 8:
+        raise ValueError("len of a15_cycle_counts is not 8! a15_cycle_counts: "+str(a15_cycle_counts))
+
+    df['a7 cycle count total diff'] = df[[x for x in a7_cycle_counts if x.find('diff') > -1]].mean(axis=1)
+    df['a7 cycle count avg rate'] = df[[x for x in a7_cycle_counts if x.find('rate') > -1]].mean(axis=1)
+    df['a15 cycle count total diff'] = df[[x for x in a15_cycle_counts if x.find('diff') > -1]].mean(axis=1)
+    df['a15 cycle count avg rate'] = df[[x for x in a15_cycle_counts if x.find('rate') > -1]].mean(axis=1)
+    
+
+    for pmc in a7_pmcs:
+        cols_to_avg = [x for x in df.columns.values if (x.find('CPU 0') > -1 or x.find('CPU 1') > -1 or x.find('CPU 2') > -1 or x.find('CPU 3') > -1) and x.find('('+pmc+')') > -1  ]
+        df['a7 '+pmc+' total diff'] = df[[x for x in cols_to_avg if x.find('diff') > -1]].mean(axis=1)
+        df['a7 '+pmc+' avg rate'] = df[[x for x in cols_to_avg if x.find('rate') > -1]].mean(axis=1)
+
+    for pmc in a15_pmcs:
+       cols_to_avg = [x for x in df.columns.values if (x.find('CPU 4') > -1 or x.find('CPU 5') > -1 or x.find('CPU 6') > -1 or x.find('CPU 7') > -1) and x.find('('+pmc+')') > -1 ]
+       df['a15 '+pmc+' total diff'] = df[[x for x in cols_to_avg if x.find('diff') > -1]].mean(axis=1)
+       df['a15 '+pmc+' avg rate'] = df[[x for x in cols_to_avg if x.find('rate') > -1]].mean(axis=1)
+
 if __name__=='__main__':
     import argparse
     import os
@@ -80,6 +119,7 @@ if __name__=='__main__':
     args=parser.parse_args()
     
     df = pd.read_csv(args.input_file_path,sep='\t')
+    create_xu3_cluster_average(df)
     old_cols = df.columns.values.tolist()
     apply_formulae(df,'gem5-stats.equations')
     
