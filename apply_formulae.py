@@ -6,6 +6,11 @@
 # Framework for analysing gem5 stats
 # This script creates new stats by applying formulae to existing stats
 
+important_cols = ['xu3 stat workload name', 'xu3 stat iteration index', 'xu3 stat core mask','xu3 stat duration mean (s)','xu3 stat duration SD (s)','xu3 stat duration (s)', 'xu3 stat Freq (MHz) C0','xu3 stat Freq (MHz) C4', 'gem5 stat model name',	'gem5 stat workloads preset',	'gem5 stat workload name',	'gem5 stat core mask',	'gem5 stat A7 Freq (MHz)',	'gem5 stat A15 Freq (MHz)',	'gem5 stat m5out directory','gem5 stat sim_seconds']
+
+def test_function(numA=1,numB=2):
+    return numA+numB
+
 def find_stats_per_group(df):
     import numpy as np
     unique_masks = df['xu3 stat core mask'].unique()
@@ -93,21 +98,21 @@ def create_xu3_cluster_average(df):
     if len(a15_cycle_counts) != 8:
         raise ValueError("len of a15_cycle_counts is not 8! a15_cycle_counts: "+str(a15_cycle_counts))
 
-    df['a7 cycle count total diff'] = df[[x for x in a7_cycle_counts if x.find('diff') > -1]].mean(axis=1)
-    df['a7 cycle count avg rate'] = df[[x for x in a7_cycle_counts if x.find('rate') > -1]].mean(axis=1)
-    df['a15 cycle count total diff'] = df[[x for x in a15_cycle_counts if x.find('diff') > -1]].mean(axis=1)
-    df['a15 cycle count avg rate'] = df[[x for x in a15_cycle_counts if x.find('rate') > -1]].mean(axis=1)
+    df['xu3new a7 cycle count total diff'] = df[[x for x in a7_cycle_counts if x.find('diff') > -1]].sum(axis=1)
+    df['xu3new a7 cycle count avg rate'] = df[[x for x in a7_cycle_counts if x.find('rate') > -1]].mean(axis=1)
+    df['xu3new a15 cycle count total diff'] = df[[x for x in a15_cycle_counts if x.find('diff') > -1]].sum(axis=1)
+    df['xu3new a15 cycle count avg rate'] = df[[x for x in a15_cycle_counts if x.find('rate') > -1]].mean(axis=1)
     
 
     for pmc in a7_pmcs:
         cols_to_avg = [x for x in df.columns.values if (x.find('CPU 0') > -1 or x.find('CPU 1') > -1 or x.find('CPU 2') > -1 or x.find('CPU 3') > -1) and x.find('('+pmc+')') > -1  ]
-        df['a7 '+pmc+' total diff'] = df[[x for x in cols_to_avg if x.find('diff') > -1]].mean(axis=1)
-        df['a7 '+pmc+' avg rate'] = df[[x for x in cols_to_avg if x.find('rate') > -1]].mean(axis=1)
+        df['xu3new a7 '+pmc+' total diff'] = df[[x for x in cols_to_avg if x.find('diff') > -1]].sum(axis=1)
+        df['xu3new a7 '+pmc+' avg rate'] = df[[x for x in cols_to_avg if x.find('rate') > -1]].mean(axis=1)
 
     for pmc in a15_pmcs:
        cols_to_avg = [x for x in df.columns.values if (x.find('CPU 4') > -1 or x.find('CPU 5') > -1 or x.find('CPU 6') > -1 or x.find('CPU 7') > -1) and x.find('('+pmc+')') > -1 ]
-       df['a15 '+pmc+' total diff'] = df[[x for x in cols_to_avg if x.find('diff') > -1]].mean(axis=1)
-       df['a15 '+pmc+' avg rate'] = df[[x for x in cols_to_avg if x.find('rate') > -1]].mean(axis=1)
+       df['xu3new a15 '+pmc+' total diff'] = df[[x for x in cols_to_avg if x.find('diff') > -1]].sum(axis=1)
+       df['xu3new a15 '+pmc+' avg rate'] = df[[x for x in cols_to_avg if x.find('rate') > -1]].mean(axis=1)
 
 if __name__=='__main__':
     import argparse
@@ -122,12 +127,10 @@ if __name__=='__main__':
     create_xu3_cluster_average(df)
     old_cols = df.columns.values.tolist()
     apply_formulae(df,'gem5-stats.equations')
-    
-    important_cols = ['xu3 stat workload name', 'xu3 stat iteration index', 'xu3 stat core mask','xu3 stat duration mean (s)','xu3 stat duration SD (s)','xu3 stat duration (s)', 'xu3 stat Freq (MHz) C0','xu3 stat Freq (MHz) C4', 'gem5 stat model name',	'gem5 stat workloads preset',	'gem5 stat workload name',	'gem5 stat core mask',	'gem5 stat A7 Freq (MHz)',	'gem5 stat A15 Freq (MHz)',	'gem5 stat m5out directory','gem5 stat sim_seconds']
-    
+    df.to_csv(args.input_file_path+'-applied_formulae.csv',sep='\t')
     new_cols_only = [x for x in df.columns.values if x not in old_cols]
     condensed_df = df[important_cols + new_cols_only]
     print df[important_cols + new_cols_only]
-    condensed_df.to_csv('condensed.csv',sep='\t')
+    condensed_df.to_csv(args.input_file_path+'-applied_formulae.csv'+'-condensed.csv',sep='\t')
     #find_stats_per_group(df)
     
