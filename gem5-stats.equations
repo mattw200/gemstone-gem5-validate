@@ -5,15 +5,22 @@ xu3gem5 duration pc err	(df['xu3gem5 duration diff abs'] / df['xu3 stat duration
 xu3gem5 duration signed err	(df['xu3gem5 duration diff'] / df['xu3 stat duration (s)'])*100.0
 xu3new clock tick rate C0	df['xu3 stat Freq (MHz) C0']*1000000
 xu3new clock tick rate C4	df['xu3 stat Freq (MHz) C4']*1000000
+xu3new clock tick diff C0	df['xu3new clock tick rate C0']*df['xu3 stat duration (s)']
+xu3new clock tick diff C4	df['xu3new clock tick rate C4']*df['xu3 stat duration (s)']
 xu3new A7 cluster utilisation	(df['xu3new a7 cycle count avg rate'] / df['xu3new clock tick rate C0'])*100.0
 xu3new A15 cluster utilisation	(df['xu3new a15 cycle count avg rate'] / df['xu3new clock tick rate C4'])*100.0
 gem5new clock tick rate A7	df['gem5 stat A7 Freq (MHz)']*1000000
 gem5new clock tick rate A15	df['gem5 stat A15 Freq (MHz)']*1000000
+gem5new clock tick diff A7	df['gem5new clock tick rate A7']*df['gem5 stat sim_seconds']
+gem5new clock tick diff A15	df['gem5new clock tick rate A15']*df['gem5 stat sim_seconds']
 gem5new A7 cycle count diff total	df['gem5 stat system.littleCluster.cpus0.numCycles'] + df['gem5 stat system.littleCluster.cpus1.numCycles'] + df['gem5 stat system.littleCluster.cpus2.numCycles'] + df['gem5 stat system.littleCluster.cpus3.numCycles']
 gem5new A15 cycle count diff total	df['gem5 stat system.bigCluster.cpus0.numCycles'] + df['gem5 stat system.bigCluster.cpus1.numCycles'] + df['gem5 stat system.bigCluster.cpus2.numCycles'] + df['gem5 stat system.bigCluster.cpus3.numCycles']
+gem5new A15 idle cycle count diff total	df['gem5 stat system.bigCluster.cpus0.idleCycles'] + df['gem5 stat system.bigCluster.cpus1.idleCycles'] + df['gem5 stat system.bigCluster.cpus2.idleCycles'] + df['gem5 stat system.bigCluster.cpus3.idleCycles']
+gem5new A15 quiesce cycle count diff total	df['gem5 stat system.bigCluster.cpus0.quiesceCycles'] + df['gem5 stat system.bigCluster.cpus1.quiesceCycles'] + df['gem5 stat system.bigCluster.cpus2.quiesceCycles'] + df['gem5 stat system.bigCluster.cpus3.quiesceCycles']
+gem5new A15 active cycles per cycle	(df['gem5new A15 cycle count diff total'] / df['gem5new clock tick diff A15'])
+gem5new A15 cycle count no idle diff total	df['gem5new A15 cycle count diff total'] - df['gem5new A15 idle cycle count diff total']
 gem5new A7 cycle count avg rate	(df['gem5new A7 cycle count diff total']/4.0) / df['gem5 stat sim_seconds']
 gem5new A15 cycle count avg rate	(df['gem5new A15 cycle count diff total']/4.0) / df['gem5 stat sim_seconds']
-
 gem5new A7 cluster utilisation	(df['gem5new A7 cycle count avg rate'] / df['gem5new clock tick rate A7'])*100.0
 gem5new A15 cluster utilisation	(df['gem5new A15 cycle count avg rate'] / df['gem5new clock tick rate A15'])*100.0
 gem5new A7 pmc diff total 0x08 inst arch exe	df['gem5 stat system.littleCluster.cpus0.committedInsts'] + df['gem5 stat system.littleCluster.cpus1.committedInsts'] + df['gem5 stat system.littleCluster.cpus2.committedInsts'] + df['gem5 stat system.littleCluster.cpus3.committedInsts']
@@ -24,6 +31,7 @@ xu3gem5 A7 0x08 total signed err	((df['xu3new a7 0x08 total diff'] - df['gem5new
 xu3gem5 A15 0x08 total signed err	((df['xu3new a15 0x08 total diff'] - df['gem5new A15 pmc diff total 0x08 inst arch exe'])/df['xu3new a15 0x08 total diff'])*100.0
 xu3gem5 A7 cycle count total signed err	((df['xu3new a7 cycle count total diff'] - df['gem5new A7 cycle count diff total'])/df['xu3new a7 cycle count total diff'])*100.0
 xu3gem5 A15 cycle count total signed err	((df['xu3new a15 cycle count total diff'] - df['gem5new A15 cycle count diff total'])/df['xu3new a15 cycle count total diff'])*100.0
+xu3gemt A15 cycle count no idle total signed err	((df['xu3new a15 cycle count total diff'] - df['gem5new A15 cycle count no idle diff total'])/df['xu3new a15 cycle count total diff'])*100.0
 gem5new A15 pmc diff total 0x1b inst spec	df['gem5 stat system.bigCluster.cpus0.iew.iewExecutedInsts']+df['gem5 stat system.bigCluster.cpus1.iew.iewExecutedInsts']+df['gem5 stat system.bigCluster.cpus2.iew.iewExecutedInsts']+df['gem5 stat system.bigCluster.cpus3.iew.iewExecutedInsts']
 gem5new A15 pmc avg rate 0x1b inst spec	((df['gem5new A15 pmc diff total 0x1b inst spec'])/4.0)/df['gem5 stat sim_seconds']
 xu3gem5 A15 pmc total diff 0x1b inst spec signed err	((df['xu3new a15 0x1B total diff'] - df['gem5new A15 pmc diff total 0x1b inst spec'])/df['xu3new a15 0x1B total diff'])*100.0
@@ -41,3 +49,35 @@ xu3gem5 A15 total diff 0x73 data proc spec signed err	((df['xu3new a15 0x73 tota
 gem5new A15 pmc total diff 0x73 data proc spec	df['gem5new C4 pmc total diff 0x73 data proc spec'] + df['gem5new C5 pmc total diff 0x73 data proc spec'] + df['gem5new C6 pmc total diff 0x73 data proc spec'] + df['gem5new C7 pmc total diff 0x73 data proc spec']
 gem5new A15 total diff 0x14 L1I access	df['gem5 stat system.bigCluster.cpus0.icache.ReadReq_accesses::total'] + df['gem5 stat system.bigCluster.cpus1.icache.ReadReq_accesses::total'] + df['gem5 stat system.bigCluster.cpus2.icache.ReadReq_accesses::total'] + df['gem5 stat system.bigCluster.cpus3.icache.ReadReq_accesses::total']
 xu3gem5 A15 total diff 0x14 L1I access signed err	((df['xu3new a15 0x14 total diff']-df['gem5new A15 total diff 0x14 L1I access'])/df['xu3new a15 0x14 total diff'])*100
+gem5new A15 pmc total diff 0x19 bus access	(df['gem5 stat system.membus.pkt_count_system.bigCluster.l2.mem_side::total'])
+xu3gem5 A15 pmc total diff 0x19 bus access signed err	((df['xu3new a15 0x19 total diff'] - df['gem5new A15 pmc total diff 0x19 bus access'])/df['xu3new a15 0x19 total diff'])*100
+gem5new C4 diff 0x19 2 bus access 2	(df['gem5 stat system.mem_ctrls.num_reads::bigCluster.cpus0.inst'] + df['gem5 stat system.mem_ctrls.num_reads::bigCluster.l2.prefetcher'])
+gem5new C5 diff 0x19 2 bus access 2	(df['gem5 stat system.mem_ctrls.num_reads::bigCluster.cpus1.inst'] + df['gem5 stat system.mem_ctrls.num_reads::bigCluster.l2.prefetcher'])
+gem5new C6 diff 0x19 2 bus access 2	(df['gem5 stat system.mem_ctrls.num_reads::bigCluster.cpus2.inst'] + df['gem5 stat system.mem_ctrls.num_reads::bigCluster.l2.prefetcher'])
+gem5new C7 diff 0x19 2 bus access 2	(df['gem5 stat system.mem_ctrls.num_reads::bigCluster.cpus3.inst'] + df['gem5 stat system.mem_ctrls.num_reads::bigCluster.l2.prefetcher'])
+gem5new A15 pmc total diff 0x19 2 bus access 2	(df['gem5new C4 diff 0x19 2 bus access 2'] + df['gem5new C5 diff 0x19 2 bus access 2'] + df['gem5new C6 diff 0x19 2 bus access 2'] + df['gem5new C7 diff 0x19 2 bus access 2'])
+xu3gem5 A15 pmc total diff 0x19 2 bus access 2 signed error	((df['xu3new a15 0x19 total diff'] - df['gem5new A15 pmc total diff 0x19 2 bus access 2'])/df['xu3new a15 0x19 total diff'])*100
+gem5new A15 pmc total diff 0x15 L1D writeback	df['gem5 stat system.bigCluster.cpus0.dcache.writebacks::total'] + df['gem5 stat system.bigCluster.cpus1.dcache.writebacks::total'] + df['gem5 stat system.bigCluster.cpus2.dcache.writebacks::total'] + df['gem5 stat system.bigCluster.cpus3.dcache.writebacks::total']
+xu3gem5 A15 pmc total diff 0x15 L1D writeback signed err	((df['xu3new a15 0x15 total diff'] - df['gem5new A15 pmc total diff 0x15 L1D writeback'])/df['xu3new a15 0x15 total diff'])*100
+gem5new A15 pmc total diff 0x04 L1D access	df['gem5 stat system.bigCluster.cpus0.dcache.overall_accesses::total'] + df['gem5 stat system.bigCluster.cpus1.dcache.overall_accesses::total'] + df['gem5 stat system.bigCluster.cpus2.dcache.overall_accesses::total'] + df['gem5 stat system.bigCluster.cpus3.dcache.overall_accesses::total']
+gem5new A15 pmc total diff 0x04 L1D access signed err	((df['xu3new a15 0x04 total diff'] - df['gem5new A15 pmc total diff 0x04 L1D access'])/df['xu3new a15 0x04 total diff'])*100
+xu3new A15 IPC	df['xu3new a15 0x08 total diff']/df['xu3new clock tick diff C4']
+gem5new A15 IPC	df['gem5new A15 pmc diff total 0x08 inst arch exe']/df['gem5new clock tick diff A15']
+xu3new A15 IspecPC	df['xu3new a15 0x1B total diff']/df['xu3new clock tick diff C4']
+gem5new A15 IspecPC	df['gem5new A15 pmc diff total 0x1b inst spec']/df['gem5new clock tick diff A15']
+xu3new A15 branch hit rate	1-(df['xu3new a15 0x10 total diff']/df['xu3new a15 0x12 total diff'])
+gem5new A15 total diff branch mispredict	df['gem5 stat system.bigCluster.cpus0.iew.branchMispredicts'] + df['gem5 stat system.bigCluster.cpus2.iew.branchMispredicts'] + df['gem5 stat system.bigCluster.cpus2.iew.branchMispredicts'] + df['gem5 stat system.bigCluster.cpus3.iew.branchMispredicts']
+gem5new A15 total diff branches	df['gem5 stat system.bigCluster.cpus0.fetch.Branches'] + df['gem5 stat system.bigCluster.cpus1.fetch.Branches'] + df['gem5 stat system.bigCluster.cpus2.fetch.Branches'] + df['gem5 stat system.bigCluster.cpus2.fetch.Branches']
+gem5new A15 branch hit rate	(1-df['gem5new A15 total diff branch mispredict']/(df['gem5new A15 total diff branches']+df['gem5new A15 total diff branch mispredict']))
+gem5new A15 L1I misses	df['gem5 stat system.bigCluster.cpus0.icache.overall_misses::total'] + df['gem5 stat system.bigCluster.cpus1.icache.overall_misses::total'] + df['gem5 stat system.bigCluster.cpus2.icache.overall_misses::total'] + df['gem5 stat system.bigCluster.cpus3.icache.overall_misses::total']
+gem5new A15 L1I hits	df['gem5 stat system.bigCluster.cpus0.icache.overall_hits::total'] + df['gem5 stat system.bigCluster.cpus0.icache.overall_hits::total'] + df['gem5 stat system.bigCluster.cpus0.icache.overall_hits::total'] + df['gem5 stat system.bigCluster.cpus0.icache.overall_hits::total']
+gem5new A15 L1I hit ratio	df['gem5new A15 L1I hits']/(df['gem5new A15 L1I misses']+df['gem5new A15 L1I hits'])
+xu3new A15 L1I hit ratio	1-(df['xu3new a15 0x01 total diff']/df['xu3new a15 0x14 total diff'])
+gem5new A15 L1D misses	df['gem5 stat system.bigCluster.cpus0.dcache.overall_misses::total'] + df['gem5 stat system.bigCluster.cpus1.dcache.overall_misses::total'] + df['gem5 stat system.bigCluster.cpus2.dcache.overall_misses::total'] + df['gem5 stat system.bigCluster.cpus3.dcache.overall_misses::total']
+gem5new A15 L1D hits	df['gem5 stat system.bigCluster.cpus0.dcache.overall_hits::total'] + df['gem5 stat system.bigCluster.cpus0.dcache.overall_hits::total'] + df['gem5 stat system.bigCluster.cpus0.dcache.overall_hits::total'] + df['gem5 stat system.bigCluster.cpus0.dcache.overall_hits::total']
+gem5new A15 L1D hit ratio	df['gem5new A15 L1D hits']/(df['gem5new A15 L1D misses']+df['gem5new A15 L1D hits'])
+xu3new A15 L1D hit ratio	1-(df['xu3new a15 0x03 total diff']/df['xu3new a15 0x04 total diff'])
+gem5new A15 L2D misses	df['gem5 stat system.bigCluster.l2.overall_misses::bigCluster.cpus0.data'] + df['gem5 stat system.bigCluster.l2.overall_misses::bigCluster.cpus1.data'] + df['gem5 stat system.bigCluster.l2.overall_misses::bigCluster.cpus2.data'] + df['gem5 stat system.bigCluster.l2.overall_misses::bigCluster.cpus3.data']
+gem5new A15 L2D hits	df['gem5 stat system.bigCluster.l2.overall_hits::bigCluster.cpus0.data'] + df['gem5 stat system.bigCluster.l2.overall_hits::bigCluster.cpus1.data'] + df['gem5 stat system.bigCluster.l2.overall_hits::bigCluster.cpus2.data'] + df['gem5 stat system.bigCluster.l2.overall_hits::bigCluster.cpus3.data']
+gem5new A15 L2D hit ratio	df['gem5new A15 L2D hits']/(df['gem5new A15 L2D misses']+df['gem5new A15 L2D hits'])
+xu3new A15 L2D hit ratio	1-(df['xu3new a15 0x17 total diff']/df['xu3new a15 0x16 total diff'])
