@@ -53,7 +53,18 @@ def combine_xu3_and_gem5(xu3_df, gem5_df, model):
             failed_finds.append([model,workload_name,core_mask,a7_freq,a15_freq])
             continue
         elif len(filtered_df.index) > 1:
-            raise ValueError("Multiple entries")
+            filtered_presets = filtered_df['gem5 stat workloads preset'].unique()
+            print("ATTN: found multiple workloads from different workload presents ("+str(filtered_presets)+").")
+            print("Choose which one you want to use:")
+            for i in range(0, len(filtered_presets)):
+              print(str(i)+": "+filtered_presets[i])
+            user_sel = int(raw_input("Select the number of which one you want to use: "))
+            filtered_df = filtered_df[filtered_df['gem5 stat workloads preset'] == filtered_presets[user_sel]]
+            print ("Proceeding with this selection: ")
+            print (filtered_df)
+            raw_input("Press <enter> to confirm (crtl-c to abort and start over)")
+            if len(filtered_df.index) > 1:
+                raise ValueError("Multiple entries for the same workload.")
         #gem5_i = gem5_df.iloc[0].index
         #print("Gem5 index: "+str(gem5_i))
         print("DF:")

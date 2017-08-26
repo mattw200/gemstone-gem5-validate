@@ -11,6 +11,7 @@ important_cols = ['xu3 stat workload name', 'xu3 stat iteration index', 'xu3 sta
 def test_function(numA=1,numB=2):
     return numA+numB
 
+# not used:
 def find_stats_per_group(df):
     import numpy as np
     unique_masks = df['xu3 stat core mask'].unique()
@@ -133,4 +134,49 @@ if __name__=='__main__':
     print df[important_cols + new_cols_only]
     condensed_df.to_csv(args.input_file_path+'-applied_formulae.csv'+'-condensed.csv',sep='\t')
     #find_stats_per_group(df)
+    #print df[important_cols + ['gem5new clock tick diff A15'] +  ['gem5new A15 cycle count diff total'] +  ['gem5new A15 active cycles per cycle'] + ['xu3gem5 A15 cycle count total signed err'] +  ['xu3gemt A15 cycle count no idle total signed err']]
+   
+    # collect stats of A15
+    temp1_df = df[df['xu3 stat core mask'] == '4,5,6,7']
+    signed_err_cols = [x for x in temp1_df.columns.values if x.find('signed err') > -1]
+    temp1_df = temp1_df[important_cols + signed_err_cols]
+    print signed_err_cols
+    cols_signed_and_abs = []
+    for s in signed_err_cols:
+        temp1_df[s.replace('signed', 'ABS')] = temp1_df[s].abs() 
+        cols_signed_and_abs.append(s)
+        cols_signed_and_abs.append(s.replace('signed','ABS'))
+    temp1_df = temp1_df[important_cols + cols_signed_and_abs]
+    temp1_df.to_csv('temp1_df.csv',sep='\t')
+    #signed
+    temp1_signed_mean_df = temp1_df[signed_err_cols].mean()
+    temp1_signed_mean_df.to_csv('temp1_signed_df.csv',sep='\t')
+    # ABS
+    temp1_abs_mean_df = temp1_df[[x for x in cols_signed_and_abs if x not in signed_err_cols]].mean()
+    temp1_abs_mean_df.to_csv('temp1_abs_df.csv',sep='\t')
+  
+    # IPC and rates (e.g. L1D hit rate etc.)
+    temp2_df = df[df['xu3 stat core mask'] == '4,5,6,7']
+    rate_cols = [x for x in temp2_df.columns.values if x.find('rate') > -1 or x.find('ratio') > -1 or x.find('IPC') > -1 ]
+    temp2_df = temp2_df[important_cols + rate_cols]
+    temp2_df.to_csv('temp2_df.csv',sep='\t')
+    temp2_mean_df = temp2_df[rate_cols].mean()
+    temp2_mean_df.to_csv('temp2_mean.csv',sep='\t')
+
+    # correlation analysis
+    df_a15 = df[df['xu3 stat core mask'] == '4,5,6,7']
+    duration_signed_col = 'xu3gem5 duration signed err'
+    xu3_pmcs_diff_cols = [x for x in df_a15.columns.values if x.find('avg') > -1 and x.find('a15') > -1 and x.find('rate') > -1]
+    gem5_pmcs_diff_cols = [x for x in df_a15.columns.values if x.find('gem5 stat') > -1 and x.find('bigCluster') > -1]
+    print ("\n\nxu3 pmcs: "+str(xu3_pmcs_diff_cols))
+    from scipy.stats.stats import pearsonr
+    import numpy as np
+    print(df_a15[xu3_pmcs_diff_cols].apply(np.mean))
+    print(df_a15[xu3_pmcs_diff_cols].apply(lambda x: np.mean(x)))
+    correlation_xu3_df = df_a15[xu3_pmcs_diff_cols].apply(lambda x: pearsonr(x,df_a15[duration_signed_col])[0])
+    correlation_gem5_df = df_a15[gem5_pmcs_diff_cols].apply(lambda x: pearsonr(x,df_a15[duration_signed_col])[0])
+    print (correlation_xu3_df)
+    correlation_xu3_df.to_csv('correlation_xu3_pmcs.csv',sep='\t')
+    correlation_gem5_df.to_csv('correlation_gem5_pmcs.csv',sep='\t')
+    
     
