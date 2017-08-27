@@ -96,6 +96,9 @@ if __name__=='__main__':
                help="The combined gem5out csv file")
     parser.add_argument('--model',  dest='model', required=True, \
                help="Only uses gem5 stats from one model,e.g. 'bko'")
+    parser.add_argument('-o','--output-filepath',dest='output_filepath', \
+               required=False, \
+               help="Name and location of output file")
     args=parser.parse_args()
     gem5_input_df = pd.read_csv(args.gem5_input_csv,sep='\t')
     xu3_input_df = pd.read_csv(args.xu3_input_csv,sep='\t')
@@ -107,6 +110,10 @@ if __name__=='__main__':
     combined_df = combine_xu3_and_gem5(xu3_input_df, gem5_input_df, args.model)
     # rename the columns so the formulae works
     # apply formulae
-    combined_df.to_csv('results.csv',sep='\t')
+    if args.output_filepath:
+        combined_df.to_csv(args.output_filepath,sep='\t')
+    else:
+        combined_df.to_csv('results.csv',sep='\t')
+
 
     

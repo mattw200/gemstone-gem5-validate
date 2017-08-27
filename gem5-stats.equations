@@ -36,8 +36,9 @@ gem5new A15 pmc diff total 0x1b inst spec	df['gem5 stat system.bigCluster.cpus0.
 gem5new A15 pmc avg rate 0x1b inst spec	((df['gem5new A15 pmc diff total 0x1b inst spec'])/4.0)/df['gem5 stat sim_seconds']
 xu3gem5 A15 pmc total diff 0x1b inst spec signed err	((df['xu3new a15 0x1B total diff'] - df['gem5new A15 pmc diff total 0x1b inst spec'])/df['xu3new a15 0x1B total diff'])*100.0
 xu3gem5 A15 pmc avg rate 0x1b inst spec signed err	((df['xu3new a15 0x1B avg rate'] - df['gem5new A15 pmc avg rate 0x1b inst spec'])/df['xu3new a15 0x1B avg rate'])*100.0
-gem5new A15 pmc total diff 0x50 L2D load	df['gem5 stat system.bigCluster.l2.demand_accesses::total']
-gem5new A15 pmc total diff 0x50 L2D load	df['gem5 stat system.bigCluster.l2.ReadExReq_accesses::total']
+gem5new A15 pmc total diff 0x50 L2D load old	df['gem5 stat system.bigCluster.l2.demand_accesses::total']
+gem5new A15 pmc total diff 0x50 L2D load old old	df['gem5 stat system.bigCluster.l2.ReadExReq_accesses::total']
+gem5new A15 pmc total diff 0x50 L2D load	df['gem5 stat system.bigCluster.cpus0.dcache.ReadReq_misses::total'] + df['gem5 stat system.bigCluster.cpus1.dcache.ReadReq_misses::total'] + df['gem5 stat system.bigCluster.cpus2.dcache.ReadReq_misses::total'] + df['gem5 stat system.bigCluster.cpus3.dcache.ReadReq_misses::total']
 gem5new A15 pmc avg rate 0x50 L2D load	((df['gem5new A15 pmc total diff 0x50 L2D load'])/4.0) / df['gem5 stat sim_seconds']
 xu3gem5 A15 pmc total diff 0x50 L2D load signed err	((df['xu3new a15 0x50 total diff'] - df['gem5new A15 pmc total diff 0x50 L2D load'])/df['xu3new a15 0x50 total diff'])*100.0
 xu3gem5 A15 pmc avg rate 0x50 L2D load signed err	((df['xu3new a15 0x50 avg rate'] - df['gem5new A15 pmc avg rate 0x50 L2D load'])/df['xu3new a15 0x50 avg rate'])*100.0
@@ -88,5 +89,6 @@ xu3new FP	df['xu3new a15 0x75 total diff']
 xu3gem5 A15 pmc total diff 0x75 FP signed err	((df['xu3new a15 0x75 total diff']-df['gem5new A15 pmc total diff 0x75 FP'])/df['xu3new a15 0x75 total diff'])*100
 gem5new A15 pmc total diff 0x70	df['gem5 stat system.bigCluster.cpus0.iq.FU_type_0::MemRead']+df['gem5 stat system.bigCluster.cpus0.iq.FU_type_0::FloatMemRead'] + df['gem5 stat system.bigCluster.cpus1.iq.FU_type_0::MemRead']+df['gem5 stat system.bigCluster.cpus1.iq.FU_type_0::FloatMemRead'] + df['gem5 stat system.bigCluster.cpus2.iq.FU_type_0::MemRead']+df['gem5 stat system.bigCluster.cpus2.iq.FU_type_0::FloatMemRead'] + df['gem5 stat system.bigCluster.cpus3.iq.FU_type_0::MemRead']+df['gem5 stat system.bigCluster.cpus3.iq.FU_type_0::FloatMemRead']
 xu3gem5 A15 pmc total diff 0x70 signed err	((df['xu3new a15 0x70 total diff'] - df['gem5new A15 pmc total diff 0x70'])/df['xu3new a15 0x70 total diff'])*100
-gem5new A15 pmc total diff 0x51 L2D store	df['gem5 stat system.bigCluster.l2.writebacks::total']
+gem5new A15 pmc total diff 0x51 L2D store old	df['gem5 stat system.bigCluster.l2.writebacks::total']
+gem5new A15 pmc total diff 0x51 L2D store	df['gem5 stat system.bigCluster.cpus0.dcache.WriteReq_misses::total'] + df['gem5 stat system.bigCluster.cpus1.dcache.WriteReq_misses::total'] + df['gem5 stat system.bigCluster.cpus2.dcache.WriteReq_misses::total'] + df['gem5 stat system.bigCluster.cpus3.dcache.WriteReq_misses::total']
 xu3gem5 A15 pmc total diff 0x51 L2D store signed err	((df['xu3new a15 0x51 total diff'] - df['gem5new A15 pmc total diff 0x51 L2D store'])/df['xu3new a15 0x51 total diff'])*100
