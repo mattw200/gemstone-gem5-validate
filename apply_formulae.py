@@ -154,6 +154,15 @@ if __name__=='__main__':
     print("A7 abs: "+str(err_df[err_df['xu3 stat core mask'] == '0,1,2,3']['xu3gem5 duration pc err'].mean()))
     print("A7 signed: "+str(err_df[err_df['xu3 stat core mask'] == '0,1,2,3']['xu3gem5 duration signed err'].mean()))
 
+    # do freq breakdown:
+    print("A15 1800: "+str(err_df[(err_df['xu3 stat Freq (MHz) C4'] == 1800) & (err_df['xu3 stat core mask'] == '4,5,6,7')]['xu3gem5 duration signed err'].mean()))
+    print("A15 1000: "+str(err_df[(err_df['xu3 stat Freq (MHz) C4'] == 1000) & (err_df['xu3 stat core mask'] == '4,5,6,7')]['xu3gem5 duration signed err'].mean()))
+    print("A15 600: "+str(err_df[(err_df['xu3 stat Freq (MHz) C4'] == 600) & (err_df['xu3 stat core mask'] == '4,5,6,7')]['xu3gem5 duration signed err'].mean()))
+    print("A7 1400: "+str(err_df[(err_df['xu3 stat Freq (MHz) C0'] == 1400) & (err_df['xu3 stat core mask'] == '0,1,2,3')]['xu3gem5 duration signed err'].mean()))
+    print("A7 1000: "+str(err_df[(err_df['xu3 stat Freq (MHz) C0'] == 1000) & (err_df['xu3 stat core mask'] == '0,1,2,3')]['xu3gem5 duration signed err'].mean()))
+    print("A7 600: "+str(err_df[(err_df['xu3 stat Freq (MHz) C0'] == 600) & (err_df['xu3 stat core mask'] == '0,1,2,3')]['xu3gem5 duration signed err'].mean()))
+    # df[(df['col1'] >= 1) & (df['col1'] <=1 )]
+
     print("All errors: "+str(len(err_df.index)))
     print("Positive errors: "+str(len(err_df[err_df['xu3gem5 duration signed err'] >= 0])))
     over_100_MAPE = err_df[err_df['xu3gem5 duration pc err'] > 100.0]['xu3 stat workload name'].unique().tolist()
@@ -165,11 +174,6 @@ if __name__=='__main__':
     for wl in unique_wls:
         print(wl+": "+str(df['xu3 stat workload name'].value_counts()[wl]))
 
-    df[df['xu3 stat workload name'] == 'dhrystone'].to_csv(args.input_file_path+'-dhrystone-temp.csv')
-
-    chickentikka
-
-   
     # collect stats of A15
     temp1_df = df[df['xu3 stat core mask'] == '4,5,6,7']
     signed_err_cols = [x for x in temp1_df.columns.values if x.find('signed err') > -1]
@@ -197,6 +201,11 @@ if __name__=='__main__':
     temp2_mean_df = temp2_df[rate_cols].mean()
     temp2_mean_df.to_csv(args.input_file_path+'-temp2_mean.csv',sep='\t')
 
+    # cluster analysis
+    #import scipy.cluster.hierarchy as sch
+    #cols_to_cluster = [x for x in 
+    #data = input_df[list_of_pmcs].values
+
     # correlation analysis
     df_a15 = df[df['xu3 stat core mask'] == '4,5,6,7']
     duration_signed_col = 'xu3gem5 duration signed err'
@@ -211,4 +220,70 @@ if __name__=='__main__':
     correlation_gem5_df = df_a15[gem5_pmcs_diff_cols].apply(lambda x: pearsonr(x,df_a15[duration_signed_col])[0])
     print (correlation_xu3_df)
     correlation_xu3_df.to_csv(args.input_file_path+'-correlation_xu3_pmcs.csv',sep='\t')
-    correlation_gem5_df.to_csv(args.input_file_path+'correlation_gem5_pmcs.csv',sep='\t')
+    correlation_gem5_df.to_csv(args.input_file_path+'-correlation_gem5_pmcs.csv',sep='\t')
+
+    # now find top 20 gem5 PMCs:
+    csv_string = ''
+    for i in range(0, len(correlation_gem5_df.index)):
+        if correlation_gem5_df.iloc[i] > 0.3 or correlation_gem5_df.iloc[i] < -0.3:
+            print(str(correlation_gem5_df.index[i]) + "    " + str(correlation_gem5_df.iloc[i]))
+            csv_string += (str(correlation_gem5_df.index[i]) + "\t" + str(correlation_gem5_df.iloc[i]))+'\n'
+        #print(str(corr.index)+" "+str(corr))
+    with open(args.input_file_path+'-correlation-top-gem5-pmcs.csv', 'w') as f:
+        f.write(csv_string)
+    f.closed
+
+    # gem5 correlation analysis 2:
+    # 1. Filter
+    g5_cor_an_df = df[(df['xu3 stat core mask'] == '4,5,6,7') & (df['xu3 stat Freq (MHz) C4'] == 1000)]
+    # 2. Combine events from different CPUs:
+    gem5_stat_cols_no_cpu = [x for x in g5_cor_an_df.columns.values if (x.find('gem5 stat ') > -1 and x.find('system.bigCluster.cpus') == -1 and x.find('system.littleCluster') == -1) or  x == duration_signed_col]
+    new_g5_corr_df = g5_cor_an_df[gem5_stat_cols_no_cpu]
+    gem5_stat_cols_cpu = [x for x in g5_cor_an_df.columns.values if x.find('system.bigCluster.cpu') > -1]
+    for cpu_stat in gem5_stat_cols_cpu:
+        new_col_name = cpu_stat.replace('.cpus0.','.cpusX.').replace('.cpus1.','.cpusX.').replace('.cpus2.','.cpusX.').replace('.cpus3.','.cpusX.')
+        new_col_val = 0
+        key_error = 0
+        if new_col_name in new_g5_corr_df.columns.values.tolist():
+            continue # skip if done already
+        try:
+            new_col_val += g5_cor_an_df[new_col_name.replace('.cpusX.','.cpus0.')]
+        except KeyError:
+            key_error += 1
+        try:
+            new_col_val += g5_cor_an_df[new_col_name.replace('.cpusX.','.cpus1.')]
+        except KeyError:
+            key_error += 1
+        try:
+            new_col_val += g5_cor_an_df[new_col_name.replace('.cpusX.','.cpus2.')]
+        except KeyError:
+            key_error += 1
+        try:
+            new_col_val += g5_cor_an_df[new_col_name.replace('.cpusX.','.cpus3.')]
+        except KeyError:
+            key_error += 1
+        if key_error > 3:
+            raise KeyError("Failed at life")
+        new_g5_corr_df[new_col_name] = new_col_val
+    print new_g5_corr_df
+    # the new_g5_corr_df should now have the non-cpu and cpuX columns only
+    # 3.  Add the signed error back on
+    cols_to_apply = [x for x in new_g5_corr_df.columns.values.tolist() if x != duration_signed_col]
+    cols_to_apply = [x for x in cols_to_apply if x in new_g5_corr_df._get_numeric_data().columns.values.tolist()]
+    print ("duration signed col:")
+    print new_g5_corr_df[duration_signed_col]
+    new_g5_cor_result = new_g5_corr_df[cols_to_apply].apply(lambda x: pearsonr(x,new_g5_corr_df[duration_signed_col])[0])
+    new_g5_cor_result.to_csv(args.input_file_path+'-new-g5-cor-anal.csv',sep='\t')
+    # now find top 20 gem5 PMCs:
+    csv_string = ''
+    for i in range(0, len(new_g5_cor_result.index)):
+        if new_g5_cor_result.iloc[i] > 0.3 or new_g5_cor_result.iloc[i] < -0.3:
+            print(str(new_g5_cor_result.index[i]) + "    " + str(new_g5_cor_result.iloc[i]))
+            csv_string += (str(new_g5_cor_result.index[i]) + "\t" + str(new_g5_cor_result.iloc[i]))+'\n'
+        #print(str(corr.index)+" "+str(corr))
+    with open(args.input_file_path+'-new-g5-cor-anal-over-30', 'w') as f:
+        f.write(csv_string)
+    f.closed
+    # do cluster analysis
+    # SPLIT INTO CLUSTER with both XU3 and gem5 stats
+    
