@@ -8,8 +8,229 @@
 
 important_cols = ['xu3 stat workload name', 'xu3 stat iteration index', 'xu3 stat core mask','xu3 stat duration mean (s)','xu3 stat duration SD (s)','xu3 stat duration (s)', 'xu3 stat Freq (MHz) C0','xu3 stat Freq (MHz) C4', 'gem5 stat model name',	'gem5 stat workloads preset',	'gem5 stat workload name',	'gem5 stat core mask',	'gem5 stat A7 Freq (MHz)',	'gem5 stat A15 Freq (MHz)',	'gem5 stat m5out directory','gem5 stat sim_seconds']
 
-def test_function(numA=1,numB=2):
-    return numA+numB
+
+def mape(actual, predicted):
+    return ((actual - predicted)/actual).abs()*100.0
+
+def wape(actual, predicted):
+    return  (((actual - predicted).abs()).sum() / (actual.sum()))*100.0
+
+
+def make_gem5_cols_per_cluster(df, cluster_name,create_rates=False):
+    # e.g. cluster_name = 'bigCluster'
+    gem5_stat_cols_no_cpu = [x for x in df.columns.values if (x.find('gem5 stat ') > -1 and x.find('system.') > -1 and x.find('system.bigCluster.cpus') == -1 and x.find('system.littleCluster') == -1)]
+    new_g5_corr_df = df[gem5_stat_cols_no_cpu]
+    gem5_stat_cols_cpu = [x for x in df.columns.values if x.find('system.'+cluster_name+'.cpu') > -1]
+    for cpu_stat in gem5_stat_cols_cpu:
+        new_col_name = cpu_stat.replace('.cpus0.','.cpusX.').replace('.cpus1.','.cpusX.').replace('.cpus2.','.cpusX.').replace('.cpus3.','.cpusX.')
+        new_col_val = 0
+        key_error = 0
+        if new_col_name in new_g5_corr_df.columns.values.tolist():
+            continue # skip if done already
+        try:
+            new_col_val += df[new_col_name.replace('.cpusX.','.cpus0.')]
+        except KeyError:
+            key_error += 1
+        try:
+            new_col_val += df[new_col_name.replace('.cpusX.','.cpus1.')]
+        except KeyError:
+            key_error += 1
+        try:
+            new_col_val += df[new_col_name.replace('.cpusX.','.cpus2.')]
+        except KeyError:
+            key_error += 1
+        try:
+            new_col_val += df[new_col_name.replace('.cpusX.','.cpus3.')]
+        except KeyError:
+            key_error += 1
+        if key_error > 3:
+            raise KeyError("Failed at life")
+        new_g5_corr_df[new_col_name] = new_col_val
+    if create_rates:
+        for col in new_g5_corr_df.columns.values:
+            new_g5_corr_df['rate '+col] = new_g5_corr_df[col]/df['gem5 stat sim_seconds']
+    return new_g5_corr_df.fillna(0)
+
+
+def cluster_analysis(data, labels, level, filepath,show_plot=False):
+    import scipy
+    import matplotlib as mpl
+    import scipy.cluster.hierarchy as sch
+    import matplotlib.pyplot as plt
+    import numpy as np
+    D = scipy.spatial.distance.pdist(data, 'correlation')
+    #print("PRINTING D")
+    #np.set_printoptions(threshold=np.nan)
+    #print D
+    Y = scipy.cluster.hierarchy.linkage(D, method='single')
+    d = scipy.cluster.hierarchy.dendrogram(Y, color_threshold=level, labels=labels)	
+    if show_plot:
+        plt.show()
+    #plt.close()
+    plt.savefig(filepath)
+    plt.close()
+    ind = sch.fcluster(Y, level, 'distance')
+    #table = [labels, nice_event_names.get_names(labels), ind]
+    table = [labels, ind]
+    clusters_df = pd.DataFrame(np.transpose(table), columns=['Labels', 'Cluster_ID'])
+    return clusters_df
+
+
+def build_model(df, core_mask, freq_C0, freq_C4, y_col,var_select_func,num_inputs,filepath_prefix):
+    #import statsmodels.formula.api as smf
+    import statsmodels.api as sm
+    import math
+    temp_df = df[(df['xu3 stat core mask'] == core_mask) & (df['xu3 stat Freq (MHz) C0'] == freq_C0) & (df['xu3 stat Freq (MHz) C4'] == freq_C4)]
+    # remove gem5 stats and re-inster them 'per cluster
+    gem5_cluster = 'bigCluster'
+    if core_mask == '4,5,6,7':
+        gem5_cluster = 'bigCluster'
+    elif core_mask == '0,1,2,3':
+        gem5_cluster = 'littleCluster'
+    else:
+        raise ValueError("Unrecognised core mask!")
+    gem5_per_cluster  = make_gem5_cols_per_cluster(temp_df, gem5_cluster)
+    temp_df = temp_df[[x for x in temp_df.columns.values if x.find('gem5 stat') == -1]]
+    temp_df = pd.concat([temp_df, gem5_per_cluster], axis=1)
+    temp_df =  temp_df._get_numeric_data().fillna(0)
+    temp_df = temp_df.fillna(0)
+    temp_df = temp_df.loc[:, (temp_df != 0).any(axis=0)] # remove 0 col
+    temp_df = temp_df.loc[:, (temp_df != temp_df.ix[0]).any()] 
+    temp_df = temp_df[[x for x in temp_df.columns.values.tolist() if not 0 in temp_df[x].tolist() ]]
+    temp_df['const'] = 1
+    # get var names:
+    var_names = var_select_func(temp_df)
+    model_inputs = []
+    model_inputs.append('const')
+    models = []
+    for i in range(0, num_inputs):
+        best_r2 = 0
+        best_var = ''
+        best_model_res = 0
+        var_names = [x for x in var_names if x in temp_df.columns.values.tolist() and x != y_col]
+        
+        for var in var_names:
+            dep_vars = model_inputs + [var]
+            print ("Trying with these vars: "+str(dep_vars))
+            #formula = ''+y_col+' ~ '+' + '.join(["Q('"+x+"')" for x in dep_vars])+' '
+            #print(formula)
+            #mod = smf.ols(formula=formula,data=temp_df)
+            X = temp_df[dep_vars]
+            y = temp_df[y_col]
+            #X = sm.add_constant(X) # use const
+            res = sm.OLS(y,X).fit()
+            r2 = res.rsquared 
+            print res.summary()
+            if r2 > best_r2:
+                best_r2 = r2
+                best_var = var
+                best_model_res = res
+        model_inputs.append(best_var)
+        models.append(best_model_res)
+    model_summary_df = pd.DataFrame(columns=['number_of_events', 'R2', 'adjR2', 'WAPE'])
+    for i in range(0, len(models)):
+        model = models[i]
+        print "\nMODEL"
+        print ("r2: "+str(model.rsquared))
+        print ("params: "+(str(model.params)))
+        print ("Predict:")
+        print model.predict()
+        print ("MAPE: "+str(mape(temp_df[y_col],model.predict()).mean()))
+        print ("MAPE: ")
+        print mape(temp_df[y_col], model.predict())
+        print ("Actual: ")
+        print temp_df[y_col]
+        print "Predicted:"
+        print model.predict()
+        print "WAPE:"
+        print wape(temp_df[y_col],model.predict())
+        model_summary_df.append({
+                'number_of_events' : i,
+                'R2' : model.rsquared,
+                'adjR2' : model.rsquared_adj,
+                'WAPE' :  wape(temp_df[y_col],model.predict()),
+                'SER' : math.sqrt(model.scale)
+                },ignore_index=True)
+        model.params.to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
+    model_summary_df.to_csv(filepath_prefix+'-model-summary-'+str(i)+'.csv',sep='\t')
+                
+
+def workload_clustering(df, core_mask, freq_C0,freq_C4, graph_out_prefix_path):
+    import numpy as np
+    temp_df = df[(df['xu3 stat core mask'] == core_mask) & (df['xu3 stat Freq (MHz) C0'] == freq_C0) & (df['xu3 stat Freq (MHz) C4'] == freq_C4)]
+    # cluster using xu3 diffs and rates
+    xu3_cluster_id = 'a15'
+    if core_mask == '0,1,2,3':
+        xu3_cluster_id = 'a7'
+    elif core_mask == '4,5,6,7':
+        pass
+    else:
+        raise ValueError("Unrecognised core mask")
+    #wl_cluster_df = temp_df[[x for x in temp_df.columns.values.tolist() if x.find('xu3new') > -1 and (x.find('total diff') > -1 or x.find('avg rate') > -1) and x.find(xu3_cluster_id) > -1]]
+    # only cluster workloads with rates
+    wl_cluster_df = temp_df[[x for x in temp_df.columns.values.tolist() if x.find('xu3new') > -1 and (x.find('avg rate') > -1) and x.find(xu3_cluster_id) > -1]]
+    wl_cluster_df = wl_cluster_df.fillna(0)
+    wl_cluster_df = wl_cluster_df.loc[:, (wl_cluster_df != 0).any(axis=0)] # remove 0 col
+    wl_cluster_df = wl_cluster_df.loc[:, (wl_cluster_df != wl_cluster_df.iloc[0]).any()] 
+    wl_cluster_df = wl_cluster_df[[x for x in wl_cluster_df.columns.values.tolist() if not 0 in wl_cluster_df[x].tolist() ]]
+    data = wl_cluster_df.values
+    levels_list = [ 0.012, 0.007]
+    clusters_dfs = []
+    for i in range(0, len(levels_list)):
+       clusters_dfs.append(cluster_analysis((data), temp_df['xu3 stat workload name'].tolist(), levels_list[i], graph_out_prefix_path+'-plot-dendrogram-wls-'+str(i)+'.pdf',show_plot=False))
+    wl_clusters_df = pd.DataFrame({'wl name':temp_df['xu3 stat workload name'].tolist()} )
+    for i in range(0,len(levels_list)):
+        wl_clusters_df['cluster '+str(i)] = clusters_dfs[i]['Cluster_ID']
+        #wl_clusters_df['workloads '+str(i)] = clusters_dfs[i]['Labels']
+        wl_clusters_df['stat name '+str(i)] = clusters_df[i]['Labels']
+        print clusters_dfs[i]
+    return wl_clusters_df
+
+def corr_and_cluster_analysis(df, core_mask, freq_C0, freq_C4, cor_y, graph_out_prefix_path,corr_only=False):
+    import numpy as np
+    # cluster analysis
+    temp_df = df[(df['xu3 stat core mask'] == core_mask) & (df['xu3 stat Freq (MHz) C0'] == freq_C0) & (df['xu3 stat Freq (MHz) C4'] == freq_C4)]
+    # get get gem5 per-cluster stats:
+    gem5_sum_cluster_df = 0
+    xu3_cluster_id = 'a15'
+    if core_mask == '0,1,2,3':
+        gem5_sum_cluster_df = make_gem5_cols_per_cluster(temp_df, 'littleCluster')
+        xu3_cluster_id = 'a7'
+    elif core_mask == '4,5,6,7':
+        gem5_sum_cluster_df = make_gem5_cols_per_cluster(temp_df, 'bigCluster')
+    else:
+        raise ValueError("Unrecognised core mask")
+    xu3_sum_cluster_df = temp_df[[x for x in temp_df.columns.values.tolist() if x.find('xu3new') > -1 and (x.find('total diff') > -1 or x.find('avg rate') > -1) and x.find(xu3_cluster_id) > -1]]
+    print('XU3 headings: '+str(xu3_sum_cluster_df.columns.values.tolist()))
+    combined_df = pd.concat([xu3_sum_cluster_df,gem5_sum_cluster_df], axis=1)._get_numeric_data()
+    combined_df = combined_df.fillna(0)
+    combined_df = combined_df.loc[:, (combined_df != 0).any(axis=0)] # remove 0 col
+    combined_df = combined_df.loc[:, (combined_df != combined_df.iloc[0]).any()] 
+    combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if not 0 in combined_df[x].tolist() ]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if combined_df[x].mean() > 5000 ]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if all(i >= 500 for i in combined_df[x].tolist())  ]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if all(i >= 1000000000 for i in combined_df[x].tolist())  ]]
+    #combined_df.to_csv('debug-combined_df.csv', sep='\t')
+    #print combined_df
+    data = combined_df.values
+    levels_list = []
+    if not corr_only:
+        levels_list = [ 0.18, 0.1]
+        clusters_dfs = []
+        for i in range(0, len(levels_list)):
+            clusters_dfs.append(cluster_analysis(np.transpose(data), combined_df.columns.values.tolist(), levels_list[i], graph_out_prefix_path+'-plot-dendrogram-pmcs-'+str(i)+'.pdf'))
+    # now do correlation analysis and combine with cluster info into one DF
+    from scipy.stats.stats import pearsonr
+    correlation_combined_df = combined_df.apply(lambda x: pearsonr(x,temp_df[cor_y])[0])
+    corr_and_cluster_df = pd.DataFrame({'stat name':correlation_combined_df.index, 'correlation':correlation_combined_df.values})
+    for i in range(0,len(levels_list)):
+        corr_and_cluster_df['cluster '+str(i)+' ('+str(levels_list[i])+')'] = clusters_dfs[i]['Cluster_ID']
+    print corr_and_cluster_df
+    corr_and_cluster_df.to_csv(graph_out_prefix_path+'-corr-and-cluster.csv',sep='\t')
+    # now make for forr > 0.3
+    corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.3) | (corr_and_cluster_df['correlation'] < -0.3)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-30.csv',sep='\t')
+    corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.25) | (corr_and_cluster_df['correlation'] < -0.25)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-25.csv',sep='\t')
+
 
 # not used:
 def find_stats_per_group(df):
@@ -139,6 +360,10 @@ if __name__=='__main__':
     #find_stats_per_group(df)
     #print df[important_cols + ['gem5new clock tick diff A15'] +  ['gem5new A15 cycle count diff total'] +  ['gem5new A15 active cycles per cycle'] + ['xu3gem5 A15 cycle count total signed err'] +  ['xu3gemt A15 cycle count no idle total signed err']]
 
+    # remove roy from all!!!
+    #df = df[[x for x in df['xu3 stat workload name'] if x.find('rl-') == -1 ]]
+    df = df[df['xu3 stat workload name'].str.contains('rl-') == False]
+
     # print average abs and signed errors:
     workloads_to_error = [x for x in df['xu3 stat workload name'].unique().tolist() if x.find('rl-') == -1]
     err_df = df[df['xu3 stat workload name'].isin(workloads_to_error)]
@@ -168,6 +393,23 @@ if __name__=='__main__':
     over_100_MAPE = err_df[err_df['xu3gem5 duration pc err'] > 100.0]['xu3 stat workload name'].unique().tolist()
     print("Over 100 errors: "+str(over_100_MAPE))
     err_df[err_df['xu3 stat workload name'].isin(over_100_MAPE)][['xu3 stat workload name', 'xu3 stat core mask', 'xu3 stat Freq (MHz) C4','xu3gem5 duration pc err','xu3gem5 duration signed err']].to_csv(args.input_file_path+'-over-100-mape.csv')
+
+    # NEW CORR ANALYSIS
+    workload_clustering_A15_df = workload_clustering(df, '4,5,6,7', 1000,1000, args.input_file_path+'-workloads-cluster')
+    # get unique cluster numbers
+    #unique_clusters = workload_clustering_A15['Cdd
+    print workload_clustering_A15_df
+    
+    chickencurry
+    corr_and_cluster_analysis(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err', args.input_file_path+'-cluster')
+    corr_and_cluster_analysis(df, '0,1,2,3', 1000, 1000, 'xu3gem5 duration signed err', args.input_file_path+'-A7-cluster',corr_only=True)
+    #build_model(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err',[x for x in df.columns.values.tolist() if (x.find('xu3new') > -1 and x.find('a15') > -1) or (x.find('gem5 stat') > -1)],10)
+    df['duration diff'] = df['xu3 stat duration (s)'] - df['gem5 stat sim_seconds']
+    #build_model(df, '4,5,6,7', 1000, 1000, 'duration diff',[x for x in df.columns.values.tolist() if (x.find('xu3new') > -1 and x.find('a15') > -1) ],10)
+    col_filter = lambda f : [x for x in f.columns.values.tolist() if x.find('gem5 stat') > -1 ]
+    build_model(df, '4,5,6,7', 1000, 1000, 'duration diff',col_filter,10,'model-build-a15-')
+    #build_model(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err',df.columns.values.tolist(),10)
+    eggsandbacon
 
     # find missing  workloads:
     unique_wls = df['xu3 stat workload name'].unique()
@@ -201,12 +443,7 @@ if __name__=='__main__':
     temp2_mean_df = temp2_df[rate_cols].mean()
     temp2_mean_df.to_csv(args.input_file_path+'-temp2_mean.csv',sep='\t')
 
-    # cluster analysis
-    #import scipy.cluster.hierarchy as sch
-    #cols_to_cluster = [x for x in 
-    #data = input_df[list_of_pmcs].values
-
-    # correlation analysis
+        # correlation analysis
     df_a15 = df[df['xu3 stat core mask'] == '4,5,6,7']
     duration_signed_col = 'xu3gem5 duration signed err'
     xu3_pmcs_diff_cols = [x for x in df_a15.columns.values if x.find('avg') > -1 and x.find('a15') > -1 and x.find('rate') > -1]
