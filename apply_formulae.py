@@ -12,6 +12,9 @@ important_cols = ['xu3 stat workload name', 'xu3 stat iteration index', 'xu3 sta
 def mape(actual, predicted):
     return ((actual - predicted)/actual).abs()*100.0
 
+def signed_err(actual,predicted):
+    return ((actual - predicted)/actual)*100.0
+
 def wape(actual, predicted):
     return  (((actual - predicted).abs()).sum() / (actual.sum()))*100.0
 
@@ -182,7 +185,7 @@ def workload_clustering(df, core_mask, freq_C0,freq_C4, graph_out_prefix_path):
     for i in range(0,len(levels_list)):
         wl_clusters_df['cluster '+str(i)] = clusters_dfs[i]['Cluster_ID']
         #wl_clusters_df['workloads '+str(i)] = clusters_dfs[i]['Labels']
-        wl_clusters_df['stat name '+str(i)] = clusters_df[i]['Labels']
+        wl_clusters_df['stat name '+str(i)] = clusters_dfs[i]['Labels']
         print clusters_dfs[i]
     return wl_clusters_df
 
@@ -399,6 +402,44 @@ if __name__=='__main__':
     # get unique cluster numbers
     #unique_clusters = workload_clustering_A15['Cdd
     print workload_clustering_A15_df
+    # find find errors of clusters
+    cluster_name = 'cluster 1' # which cluster to analyse
+    unique_clusters = workload_clustering_A15_df[cluster_name].unique()
+    cluster_mape_dict = {}
+    cluster_signed_dict = {}
+    workload_mape_dict = {}
+    workload_signed_dict = {}
+    for cluster_id in unique_clusters:
+        list_of_wls = workload_clustering_A15_df[workload_clustering_A15_df[cluster_name] == cluster_id]['wl name'].tolist()
+        print("\n\nWorkloads in "+str(cluster_id)+": "+str(list_of_wls))
+        # now calculate errors
+        cluster_err_df = df[df['xu3 stat workload name'].isin(list_of_wls)]
+        cluster_err_df = cluster_err_df[(cluster_err_df['xu3 stat Freq (MHz) C4'] == 1000) & (cluster_err_df['xu3 stat core mask'] == '4,5,6,7')]
+        cluster_mape = mape(cluster_err_df['xu3 stat duration (s)'], cluster_err_df['gem5 stat sim_seconds']).mean()
+        cluster_signed = signed_err(cluster_err_df['xu3 stat duration (s)'], cluster_err_df['gem5 stat sim_seconds']).mean()
+        print(str(cluster_mape)+'%')
+        print(str(cluster_signed)+'%')
+        cluster_mape_dict[cluster_id] = cluster_mape
+        cluster_signed_dict[cluster_id] = cluster_signed
+        for wl in list_of_wls:
+            temp_wl_err = cluster_err_df[cluster_err_df['xu3 stat workload name'] == wl]
+            if len(temp_wl_err.index) > 1:
+                raise ValueError("More than one workload with same name!"+str(cluster_err_df))
+            workload_mape_dict[wl] = mape(temp_wl_err['xu3 stat duration (s)'], temp_wl_err['gem5 stat sim_seconds']).mean()
+            workload_signed_dict[wl] = signed_err(temp_wl_err['xu3 stat duration (s)'], temp_wl_err['gem5 stat sim_seconds']).mean()
+    cluster_mape_list = [cluster_mape_dict[x] for x in workload_clustering_A15_df[cluster_name]]
+    cluster_signed_list = [cluster_signed_dict[x] for x in workload_clustering_A15_df[cluster_name]]
+    workload_clustering_A15_df[cluster_name+'_MAPE'] = cluster_mape_list
+    workload_clustering_A15_df[cluster_name+'_signed_err'] = cluster_signed_list
+    workload_clustering_A15_df['worklood_MAPE'] = [workload_mape_dict[x] for x in workload_clustering_A15_df['wl name']]
+    workload_clustering_A15_df['worklood_signed'] = [workload_signed_dict[x] for x in workload_clustering_A15_df['wl name']]
+    # now add individual workload error column
+    print workload_clustering_A15_df
+    workload_clustering_A15_df.to_csv(args.input_file_path+'-clustering-wl-w-errors.csv',sep='\t')
+    workload_clustering_A15_df[cluster_name] = [int(x) for x in workload_clustering_A15_df[cluster_name].tolist()]
+    workload_clustering_A15_df.sort_values([cluster_name],ascending=True).to_csv(args.input_file_path+'-clustering-wl-w-errors-ordered-by-cluster.csv',sep='\t')
+        
+    
     
     chickencurry
     corr_and_cluster_analysis(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err', args.input_file_path+'-cluster')
