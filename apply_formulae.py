@@ -6,7 +6,44 @@
 # Framework for analysing gem5 stats
 # This script creates new stats by applying formulae to existing stats
 
+import pmcs_and_gem5_stats
+
 important_cols = ['xu3 stat workload name', 'xu3 stat iteration index', 'xu3 stat core mask','xu3 stat duration mean (s)','xu3 stat duration SD (s)','xu3 stat duration (s)', 'xu3 stat Freq (MHz) C0','xu3 stat Freq (MHz) C4', 'gem5 stat model name',	'gem5 stat workloads preset',	'gem5 stat workload name',	'gem5 stat core mask',	'gem5 stat A7 Freq (MHz)',	'gem5 stat A15 Freq (MHz)',	'gem5 stat m5out directory','gem5 stat sim_seconds']
+
+workload_name_dict = {
+        'parsec-blackholes-4' : 'parsec-blackscholes-4',
+        'parsec-blackholes-1' : 'parsec-blackscholes-1',
+         'basicmath' : 'mi-basicmath',
+         'bitcount-small' : 'mi-bitcount-small',
+         'qsort' : 'mi-qsort',
+         'susan-smoothing' : 'mi-susan-smoothing',
+         'susan-edges' : 'mi-susan-edges',
+         'susan-corners' : 'mi-susan-corners',
+         'jpeg-encode' : 'mi-jpeg-encode',
+         'jpeg-decode' : 'mi-jpeg-decode',
+         'typeset' : 'mi-typeset',
+         'dijkstra' : 'mi-dijkstra',
+         'patricia' : 'mi-patricia',
+         'stringsearch' : 'mi-stringsearch',
+         'blowfish-encode-small' : 'mi-blowfish-encode-small',
+         'sha' : 'mi-sha',
+         'adpcm-encode-small' : 'mi-adpcm-encode-small',
+         'adpmc-decode-small' : 'mi-adpmc-decode-small',
+         'crc32-small' : 'mi-crc32-small',
+         'fft' : 'mi-fft',
+         'inv-fft' : 'mi-inv-fft',
+         'gsm-encode-small' : 'mi-gsm-encode-small'
+}
+
+def get_converted_workload_names(df, new_workload_col):
+    convert_dict = {
+        'backholes' : 'blackscholes'
+    }
+    # there are two workload column names:
+    xu3
+    list_of_workloads = df[workload_col].tolist()
+    list_of_workloads = df[workload_col]
+    df[new_workload_col] = df
 
 
 def mape(actual, predicted):
@@ -17,6 +54,9 @@ def signed_err(actual,predicted):
 
 def wape(actual, predicted):
     return  (((actual - predicted).abs()).sum() / (actual.sum()))*100.0
+
+def noramlise(df, value, value_col):
+    return (value - df[value_col].min()) / (df[value_col].max() - df[value_col].min())
 
 
 def make_gem5_cols_per_cluster(df, cluster_name,create_rates=False):
@@ -104,7 +144,7 @@ def build_model(df, core_mask, freq_C0, freq_C4, y_col,var_select_func,num_input
     # get var names:
     var_names = var_select_func(temp_df)
     model_inputs = []
-    model_inputs.append('const')
+    #model_inputs.append('const')
     models = []
     for i in range(0, num_inputs):
         best_r2 = 0
@@ -147,15 +187,23 @@ def build_model(df, core_mask, freq_C0, freq_C4, y_col,var_select_func,num_input
         print model.predict()
         print "WAPE:"
         print wape(temp_df[y_col],model.predict())
-        model_summary_df.append({
+        print model.summary()
+        model_summary_df = model_summary_df.append({
                 'number_of_events' : i,
                 'R2' : model.rsquared,
                 'adjR2' : model.rsquared_adj,
                 'WAPE' :  wape(temp_df[y_col],model.predict()),
                 'SER' : math.sqrt(model.scale)
                 },ignore_index=True)
-        model.params.to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
-    model_summary_df.to_csv(filepath_prefix+'-model-summary-'+str(i)+'.csv',sep='\t')
+        #params_df = pd.concat([model.params, model.pvalues], axis=1)
+        params_df = pd.DataFrame(columns=['Name', 'Value', 'p-Value'])
+        params_df['Name'] = model.params.index
+        params_df['Value'] = model.params.tolist()
+        params_df['p-Value'] = model.pvalues.tolist()
+        params_df['pretty name'] = params_df['Name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (total)' if x.find('total diff') > -1  else pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (rate)')
+        params_df.to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
+        #model.params.append(model.pvalues).to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
+    model_summary_df.to_csv(filepath_prefix+'-model-summary'+'.csv',sep='\t')
                 
 
 def workload_clustering(df, core_mask, freq_C0,freq_C4, graph_out_prefix_path):
@@ -215,6 +263,10 @@ def corr_and_cluster_analysis(df, core_mask, freq_C0, freq_C4, cor_y, graph_out_
     #combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if all(i >= 1000000000 for i in combined_df[x].tolist())  ]]
     #combined_df.to_csv('debug-combined_df.csv', sep='\t')
     #print combined_df
+    # filter for xu3 rate only:
+    #combined_df = combined_df[[x for x in combined_df.columns.values if x.find('avg rate') > -1]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values if x.find('avg rate') > -1]]
+    combined_df = combined_df[[x for x in combined_df.columns.values if x.find('gem5 stat') > -1]]
     data = combined_df.values
     levels_list = []
     if not corr_only:
@@ -229,7 +281,9 @@ def corr_and_cluster_analysis(df, core_mask, freq_C0, freq_C4, cor_y, graph_out_
     for i in range(0,len(levels_list)):
         corr_and_cluster_df['cluster '+str(i)+' ('+str(levels_list[i])+')'] = clusters_dfs[i]['Cluster_ID']
     print corr_and_cluster_df
-    corr_and_cluster_df.to_csv(graph_out_prefix_path+'-corr-and-cluster.csv',sep='\t')
+    corr_and_cluster_df['neat pmc names'] = corr_and_cluster_df['stat name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15'))
+    #corr_and_cluster_df = corr_and_cluster_df[corr_and_cluster_df['neat pmc names'] != 'not a pmc']
+    corr_and_cluster_df.to_csv(graph_out_prefix_path+'-corr-and-cluster.csv-gem5-only.csv',sep='\t')
     # now make for forr > 0.3
     corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.3) | (corr_and_cluster_df['correlation'] < -0.3)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-30.csv',sep='\t')
     corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.25) | (corr_and_cluster_df['correlation'] < -0.25)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-25.csv',sep='\t')
@@ -366,6 +420,19 @@ if __name__=='__main__':
     # remove roy from all!!!
     #df = df[[x for x in df['xu3 stat workload name'] if x.find('rl-') == -1 ]]
     df = df[df['xu3 stat workload name'].str.contains('rl-') == False]
+    workload_names = df['xu3 stat workload name'].tolist()
+    for i in range(0, len(workload_names)):
+        for  key in workload_name_dict:
+            print("New key: "+str(key)+" (i="+str(i)+")")
+            if workload_names[i] == key:
+                print("Key: "+str(key))
+                print("i: "+str(i))
+                workload_names[i] = workload_name_dict[key]
+                print("Done")
+    workload_names = [x.replace('-small','') for x in workload_names]
+    print("here")
+    df['xu3 stat workload name'] = workload_names
+    df['gem5 stat workload name'] = workload_names
 
     # print average abs and signed errors:
     workloads_to_error = [x for x in df['xu3 stat workload name'].unique().tolist() if x.find('rl-') == -1]
@@ -438,19 +505,66 @@ if __name__=='__main__':
     workload_clustering_A15_df.to_csv(args.input_file_path+'-clustering-wl-w-errors.csv',sep='\t')
     workload_clustering_A15_df[cluster_name] = [int(x) for x in workload_clustering_A15_df[cluster_name].tolist()]
     workload_clustering_A15_df.sort_values([cluster_name],ascending=True).to_csv(args.input_file_path+'-clustering-wl-w-errors-ordered-by-cluster.csv',sep='\t')
-        
     
+    # print df with workload clusters - for A15
+    df_A15_c_n = df[(df['xu3 stat Freq (MHz) C4'] == 1000) & (df['xu3 stat core mask'] == '4,5,6,7')]
+    # for adding the clusters numbers to the main df (added for the power modelling)
+    df_A15_c_n['workload A15 clusters'] = df_A15_c_n['xu3 stat workload name'].apply(lambda x: workload_clustering_A15_df[workload_clustering_A15_df['wl name'] == x][cluster_name].iloc[0])
+    print df_A15_c_n
+    df_A15_c_n.to_csv(args.input_file_path+'-A15-with-formulae-and-clusters.csv',sep='\t')
+    #candyfloss
+
+    import pmcs_and_gem5_stats as ps
+    #a15_100_df = df[(df['xu3 stat Freq (MHz) C4'] == 1000) & (df['xu3 stat core mask'] == '4,5,6,7') ]
+    a15_100_df = df_A15_c_n[[x for x in df_A15_c_n.columns.values.tolist()]]
+    pmc_compare_a15_df = ps.create_pmc_err_df(a15_100_df,'a15', 'bigCluster', 'xu3 stat duration (s)', 'gem5 stat sim_seconds',use_last_if_dup=True)
+    pmc_compare_a15_df.to_csv(args.input_file_path+'-pmc-compare-a15.csv',sep='\t')
+    print pmc_compare_a15_df
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('total MPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-total-mpe.csv',sep='\t')
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('cluster rate MPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-cluster-rate-mpe.csv',sep='\t')
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('total SMPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-total-smpe.csv',sep='\t')
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('cluster rate SMPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-cluster-rate-smpe.csv',sep='\t')
+    # now average each cluster normalised values
+    norm_cluster_df = pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values.tolist()]]
+    print norm_cluster_df['workload A15 clusters']
+    unique_clusters = norm_cluster_df['workload A15 clusters'].unique()
+    norm_cluster_cols = ['workload A15 clusters']+[x for x in norm_cluster_df.columns.values.tolist() if x.find('Normalised gem5 ') > -1]
+    final_norm_cluster_df = pd.DataFrame(columns=norm_cluster_cols)
+    for cur_cluster in list(set(unique_clusters)):
+        final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_df['workload A15 clusters'] == cur_cluster][norm_cluster_cols].mean(),ignore_index=True)
+    final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_cols].mean(),ignore_index=True)
+    # rename last row cluster id to 'mean'
+    final_norm_cluster_df['workload A15 clusters'].iloc[-1] = 'mean'
+    final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_df['workload A15 clusters'] != 16][norm_cluster_cols].mean(),ignore_index=True)
+    final_norm_cluster_df['workload A15 clusters'].iloc[-1] = 'mean-no-16'
+    print final_norm_cluster_df
+    final_norm_cluster_df[['workload A15 clusters']+[x for x in final_norm_cluster_df.columns.values.tolist() if x.find('Normalised gem5 ') > -1]].to_csv(args.input_file_path+'-normalised-pmcs-clustered.csv',sep='\t')
+    # now transpose for plotting:
+    norm_pmcs_cols = [x for x in final_norm_cluster_df.columns.values if x.find('Normalised gem5 ') > -1]
+    cluster_vals = final_norm_cluster_df['workload A15 clusters'].tolist()
+    final_norm_cluster_T_df = pd.DataFrame()
+    for c in cluster_vals:
+        #final_norm_cluster_T_df[c] = final_norm_cluster_df[final_norm_cluster_df['workload A15 clusters'] == c][norm_pmcs_cols]
+        final_norm_cluster_T_df[c] = final_norm_cluster_df[final_norm_cluster_df['workload A15 clusters'] == c][norm_pmcs_cols].iloc[0]
+    final_norm_cluster_T_df.index = [x[x.find('Normalised gem5 ')+16:] for x in final_norm_cluster_T_df.index.values]
+    print final_norm_cluster_T_df
+    final_norm_cluster_T_df.to_csv(args.input_file_path+'-normalised-pmcs-clustered_T.csv',sep='\t')
+    tigermoth
+
     
-    chickencurry
     corr_and_cluster_analysis(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err', args.input_file_path+'-cluster')
     corr_and_cluster_analysis(df, '0,1,2,3', 1000, 1000, 'xu3gem5 duration signed err', args.input_file_path+'-A7-cluster',corr_only=True)
     #build_model(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err',[x for x in df.columns.values.tolist() if (x.find('xu3new') > -1 and x.find('a15') > -1) or (x.find('gem5 stat') > -1)],10)
     df['duration diff'] = df['xu3 stat duration (s)'] - df['gem5 stat sim_seconds']
     #build_model(df, '4,5,6,7', 1000, 1000, 'duration diff',[x for x in df.columns.values.tolist() if (x.find('xu3new') > -1 and x.find('a15') > -1) ],10)
-    col_filter = lambda f : [x for x in f.columns.values.tolist() if x.find('gem5 stat') > -1 ]
-    build_model(df, '4,5,6,7', 1000, 1000, 'duration diff',col_filter,10,'model-build-a15-')
+    #col_filter = lambda f : [x for x in f.columns.values.tolist() if x.find('gem5 stat') > -1 ]
+    #build_model(df, '4,5,6,7', 1000, 1000, 'duration diff',col_filter,10,'model-build-a15-gem5-')
+    col_filter = lambda f : [x for x in f.columns.values.tolist() if x.find('xu3new ') > -1 ]
+    col_filter = lambda f : [x for x in f.columns.values.tolist() if x.find('gem5 stat ') > -1 ]
+    #build_model(df[(df['xu3 stat Freq (MHz) C4'] == 1000) & (df['xu3 stat core mask'] == '4,5,6,7')], '4,5,6,7', 1000, 1000, 'duration diff',col_filter,7,args.input_file_path+'-model-build-a15-xu3-')
+    build_model(df, '4,5,6,7', 1000, 1000, 'duration diff',col_filter,10,args.input_file_path+'-model-build-a15-xu3-')
     #build_model(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err',df.columns.values.tolist(),10)
-    eggsandbacon
+    #elephant
 
     # find missing  workloads:
     unique_wls = df['xu3 stat workload name'].unique()
@@ -484,7 +598,8 @@ if __name__=='__main__':
     temp2_mean_df = temp2_df[rate_cols].mean()
     temp2_mean_df.to_csv(args.input_file_path+'-temp2_mean.csv',sep='\t')
 
-        # correlation analysis
+
+    # correlation analysis
     df_a15 = df[df['xu3 stat core mask'] == '4,5,6,7']
     duration_signed_col = 'xu3gem5 duration signed err'
     xu3_pmcs_diff_cols = [x for x in df_a15.columns.values if x.find('avg') > -1 and x.find('a15') > -1 and x.find('rate') > -1]
@@ -499,6 +614,14 @@ if __name__=='__main__':
     print (correlation_xu3_df)
     correlation_xu3_df.to_csv(args.input_file_path+'-correlation_xu3_pmcs.csv',sep='\t')
     correlation_gem5_df.to_csv(args.input_file_path+'-correlation_gem5_pmcs.csv',sep='\t')
+
+    # correlation with exeuction time
+    temp_cor_df = df[(df['xu3 stat core mask'] == '4,5,6,7') & (df['xu3 stat Freq (MHz) C4'] == 1000)]
+    error_col_w_xu3_time = pearsonr(temp_cor_df['xu3 stat duration (s)'], temp_cor_df['xu3gem5 duration signed err'])
+    #error_col_w_gem5_time = pearsonr(temp_cor_df['xu3 stat duration (s)'], temp_cor_df['xu3gem5 duration signed err'])
+    print("Correlation of duration with MPE:"+str(error_col_w_xu3_time))
+    cakes
+    
 
     # now find top 20 gem5 PMCs:
     csv_string = ''

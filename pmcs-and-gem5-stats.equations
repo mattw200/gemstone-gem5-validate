@@ -1,0 +1,93 @@
+PMC_ID	NAME	gem5 equivalent
+0x01	L1I_CACHE_REFILL	df['system.bigCluster.cpus0.icache.ReadReq_misses::total']
+	L1I_CACHE_HIT	df['system.bigCluster.cpus0.icache.ReadReq_hits::total']
+0x02	L1I_TLB_REFILL	df['system.bigCluster.cpus0.itb.inst_misses']
+0x02	L1I_TLB_REFILL	df['system.bigCluster.cpus0.itb.misses']
+0x02	L1I_TLB_REFILL	df['system.bigCluster.cpus0.itb_walker_cache.overall_accesses::total']
+	L1I_TLB_HIT	df['system.bigCluster.cpus0.itb.inst_hits']
+	L1I_TLB_HIT	df['system.bigCluster.cpus0.itb.hits']
+	L1I_TLB_ACCESS	df['system.bigCluster.cpus0.itb.accesses']
+0x03	L1D_CACHE_REFILL	df['system.bigCluster.cpus0.dcache.overall_misses::total']
+	L1D_CACHE_HIT	df['system.bigCluster.cpus0.dcache.overall_hits::total']
+0x04	L1D_CACHE_ACCESS	df['system.bigCluster.cpus0.dcache.overall_accesses::total']
+0x05	L1D_TLB_REFILL	df['system.bigCluster.cpus0.dtb.read_misses'] + df['system.bigCluster.cpus0.dtb.write_misses']
+0x05	L1D_TLB_REFILL	df['system.bigCluster.cpus0.dtb_walker_cache.overall_accesses::total']
+	L1D_TLB_HIT	df['system.bigCluster.cpus0.dtb.read_hits'] + df['system.bigCluster.cpus0.dtb.write_hits']
+	L1D_TLB_ACCESS	df['system.bigCluster.cpus0.dtb.accesses']
+0x4C	L1D_TLB_RD_REFILL	df['system.bigCluster.cpus0.dtb.read_misses']
+0x4D	L1D_TLB_WR_REFILL	df['system.bigCluster.cpus0.dtb.write_misses']
+	L1D_TLB_RD_HIT	df['system.bigCluster.cpus0.dtb.read_hits']
+	L1D_TLB_WR_HIT	df['system.bigCluster.cpus0.dtb.write_hits']
+0x08	INST_RETIRED	df['system.bigCluster.cpus0.committedInsts']
+0x09	EXC_TAKEN	
+0x0A	EXC_RETURN	
+0x0B	CID_WRITE_RETIRED
+0x10	BR_MIS_PRED	df['system.bigCluster.cpus0.iew.branchMispredicts']
+0x10	BR_MIS_PRED	df['system.bigCluster.cpus0.commit.branchMispredicts']
+0x11	CPU_CYCLES	df['system.bigCluster.cpus0.numCycles']
+0x12	BR_PRED	df['system.bigCluster.cpus0.branchPred.condPredicted']
+0x12	BR_PRED	df['system.bigCluster.cpus0.iew.exec_branches']
+	BR_HIT_RATE	df['system.bigCluster.cpus1.branchPred.BTBHitPct']/100
+0x13	MEM_ACCESS_DATA	
+	L1I_CACHE_WB	df['system.bigCluster.cpus0.icache.writebacks::total']
+0x14	L1I_CACHE_ACCESS	df['system.bigCluster.cpus0.icache.overall_accesses::total']
+0x15	L1D_CACHE_WB	df['system.bigCluster.cpus0.dcache.writebacks::total']
+0x16	L2D_CACHE_ACCESS	df['system.bigCluster.l2.overall_accesses::bigCluster.cpusX.data']
+	L2I_CACHE_ACCESS	df['system.bigCluster.l2.overall_accesses::bigCluster.cpusX.inst']
+	L2_CACHE_ACCESS	df['system.bigCluster.l2.overall_accesses::total']
+0x17	L2D_CACHE_REFILL	df['system.bigCluster.l2.overall_misses::bigCluster.cpusX.data']
+	L2D_CACHE_HIT	df['system.bigCluster.l2.overall_hits::bigCluster.cpusX.data']
+	L2I_CACHE_REFILL	df['system.bigCluster.l2.overall_misses::bigCluster.cpusX.inst']
+	L2I_CACHE_HIT	df['system.bigCluster.l2.overall_hits::bigCluster.cpusX.inst']
+0x18	L2D_CACHE_WB	df['system.bigCluster.l2.writebacks::total']
+0x19	BUS_ACCESS	df['system.bigCluster.l2.overall_misses::total'] 
+0x1B	INST_SPEC	df['system.bigCluster.cpusX.iew.iewExecutedInsts']
+0x1C	TTBR_WRITE_RETIRED
+0x1D	BUS_CYCLES
+0x40	L1D_CACHE_RD	df['system.bigCluster.cpus0.dcache.ReadReq_accesses::total']
+0x41	L1D_CACHE_WR	df['system.bigCluster.cpus0.dcache.WriteReq_accesses::total']
+0x42	L1D_CACHE_REFILL_RD	df['system.bigCluster.cpus0.dcache.ReadReq_misses::total']
+0x43	L1D_CACHE_REFILL_WR	df['system.bigCluster.cpus0.dcache.WriteReq_misses::total']
+0x46	L1D_CACHE_WB_VICTIM	
+0x47	L1D_CACHE_WB_CLEAN	
+0x48	L1D_CACHE_INVAL	
+0x50	L2D_CACHE_RD	df['system.bigCluster.cpus0.dcache.ReadReq_misses::total']
+0x51	L2D_CACHE_WR	df['system.bigCluster.cpus0.dcache.WriteReq_misses::total']
+0x52	L2D_CACHE_REFILL_RD	
+0x53	L2D_CACHE_REFILL_ST	
+0x56	L2D_CACHE_WB_VICTIM	
+0x57	L2D_CACHE_WB_CLEAN	
+0x58	L2D_CACHE_INVAL	
+0x60	BUS_ACCESS_RD	
+0x61	BUS_ACCESS_ST	
+0x62	BUS_ACCESS_SHARED	
+0x63	BUS_ACCESS_NOT_SHARED	
+0x64	BUS_ACCESS_NORMAL	
+0x65	BUS_ACCESS_PERIPH	
+0x66	MEM_ACCESS_LD	
+0x67	MEM_ACCESS_ST	
+0x68	UNALIGNED_LD_SPEC	
+0x69	UNALIGNED_ST_SPEC	
+0x6A	UNALIGNED_LDST_SPEC	
+0x6C	LDREX_SPEC	
+0x6D	STREX_PASS_SPEC	
+0x6E	STREX_FAIL_SPEC	
+0x70	LD_SPEC	df['system.bigCluster.cpus0.iq.FU_type_0::MemRead'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatMemRead']
+0x71	ST_SPEC	df['system.bigCluster.cpus0.iq.FU_type_0::MemWrite'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatMemWrite']
+	LD_RETIRED	df['system.bigCluster.cpus0.commit.op_class_0::MemRead'] + df['system.bigCluster.cpus0.commit.op_class_0::FloatMemRead']
+	ST_RETIRED	df['system.bigCluster.cpus0.commit.op_class_0::MemWrite'] + df['system.bigCluster.cpus0.commit.op_class_0::FloatMemWrite']
+0x72	LDST_SPEC	df['system.bigCluster.cpus0.iq.FU_type_0::MemRead'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatMemRead'] + df['system.bigCluster.cpus0.iq.FU_type_0::MemWrite'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatMemWrite']
+0x73	DP_SPEC	df['system.bigCluster.cpus0.iq.FU_type_0::IntAlu']+df['system.bigCluster.cpus0.iq.FU_type_0::IntMult']+df['system.bigCluster.cpus0.iq.FU_type_0::IntDiv']
+0x74	ASE_SPEC	df['system.bigCluster.cpus0.iq.FU_type_0::SimdAdd'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdAddAcc'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdAlu'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdCmp'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdCvt'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdMisc'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdMult'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdMultAcc'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdShift'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdShiftAcc'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdSqrt'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatAdd'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatAlu'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatCmp'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatCvt'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatDiv'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatMisc'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatMult'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatMultAcc'] + df['system.bigCluster.cpus0.iq.FU_type_0::SimdFloatSqrt']
+0x75	VFP_SPEC	df['system.bigCluster.cpus0.iq.FU_type_0::FloatAdd'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatCmp'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatCvt'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatMult'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatMultAcc'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatDiv'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatMisc'] + df['system.bigCluster.cpus0.iq.FU_type_0::FloatSqrt']
+0x76	PC_WRITE_SPEC	
+0x78	BR_IMMED_SPEC	
+0x79	BR_RETURN_SPEC	
+0x7A	BR_INDIRECT_SPEC	
+0x7C	ISB_SPEC	
+0x7D	DSB_SPEC	
+0x7E	DMB_SPEC	
+0xE5	BUS_RD_TRANS	
+0xE6	BUS_WR_TRANS	
+0xE7	SNOOPS	
+0xE8	L2_PREFETCHES	df['system.bigCluster.l2.prefetcher.num_hwpf_issued']
