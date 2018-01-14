@@ -211,11 +211,3 @@ if __name__=='__main__':
         args.output_file = 'temp.csv'
     args.experiment_numbers = args.experiment_numbers.split(',')
     analyse_gem5_results(args.results_dir, args.experiment_numbers,'stats.equations', args.output_file)
-    banananannanana
-    stats_filepath = os.path.join(args.results_dir, 'stats.txt')
-    stats_df = stats_to_df(stats_filepath)
-    test_eqn = "sim_milliseconds = sim_seconds*1000.0"
-    #apply_new_stat(stats_df, "g5_stat_", " new_name", test_eqn)
-    apply_stat_equations_from_file(stats_df, 'stats.equations')
-    print stats_df
-    
