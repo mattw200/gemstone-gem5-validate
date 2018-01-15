@@ -12,7 +12,7 @@
 gem5_formulae_path = 'gem5-stats.equations'
 xu3_formulae_path = 'xu3-stats.equations'
 
-xu3_col_prefix = 'xu3 stat '
+xu3_col_prefix = 'hw stat '
 gem5_col_prefix = 'gem5 stat '
 
 def combine_xu3_and_gem5(xu3_df, gem5_df, model):
@@ -92,16 +92,16 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gem5-csv',  dest='gem5_input_csv', required=True, \
                help="The combined gem5out csv file")
-    parser.add_argument('--xu3-csv',  dest='xu3_input_csv', required=True, \
-               help="The combined gem5out csv file")
+    parser.add_argument('--hw-csv',  dest='hw_input_csv', required=True, \
+               help="The combined hardware csv file")
     parser.add_argument('--model',  dest='model', required=True, \
-               help="Only uses gem5 stats from one model,e.g. 'bko'")
+               help="Only uses gem5 stats from one model,e.g. 't01'")
     parser.add_argument('-o','--output-filepath',dest='output_filepath', \
                required=False, \
                help="Name and location of output file")
     args=parser.parse_args()
     gem5_input_df = pd.read_csv(args.gem5_input_csv,sep='\t')
-    xu3_input_df = pd.read_csv(args.xu3_input_csv,sep='\t')
+    xu3_input_df = pd.read_csv(args.hw_input_csv,sep='\t')
 
     # rename headers
     gem5_input_df.columns = [ "".join([gem5_col_prefix, str(x)]) for x in gem5_input_df.columns.values]
