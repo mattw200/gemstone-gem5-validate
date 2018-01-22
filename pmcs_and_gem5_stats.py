@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 import math
 import compare
-import apply_formulae
+#import apply_formulae
+import validation
 
 def get_lovely_pmc_name(existing_name, hw_cluster_id):
     hex_val = existing_name.find('0x')
