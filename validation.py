@@ -108,7 +108,7 @@ def cluster_workloads(df, cluster_label, graph_out_prefix_path):
         print clusters_dfs[i]
     return wl_clusters_df
 
-def run_validate_on_cluster(df, core_mask, cluster_label, first_core_num, output_file_prefix):
+def run_validate_on_cluster(df, core_mask, cluster_label, first_core_num, gem5_cluster_label, output_file_prefix):
     import numpy as np
     print("DF: ")
     print(df)
@@ -152,6 +152,13 @@ def run_validate_on_cluster(df, core_mask, cluster_label, first_core_num, output
                        'gem5 stat sim_seconds'
                    ))
         },ignore_index=True)
+        # Do the correlation and HCA analysis:
+        corr_and_HCA(df, cur_cluster_label, cur_gem5_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-corr-and-HCA-')
+        # Create HW PMC vs. gem5 event comparison
+        compare_hw_pmcs_and_gem5_events(
+                  df[df['hw stat Freq (MHz) C'+cur_first_core+''] == freq], 
+                  output_file_prefix+'pmc-compare-f'+str(freq)+'MHz-'
+        )
     error_df.to_csv(output_file_prefix+'error-table.csv',sep='\t')
 
 def create_exec_time_err_and_wl_cluster_plots(wl_cluster_df, wl_cluster_name, output_file_prefix):
@@ -194,6 +201,89 @@ def create_exec_time_err_and_wl_cluster_plots(wl_cluster_df, wl_cluster_name, ou
     wl_cluster_df[wl_cluster_name] = [int(x) for x in wl_cluster_df[wl_cluster_name].tolist()]
     wl_cluster_df.sort_values([wl_cluster_name],ascending=True).to_csv(args.input_file_path+'-clustering-wl-w-errors-ordered-by-cluster.csv',sep='\t')
     return wl_cluster_df
+
+
+def compare_hw_pmcs_and_gem5_events(df,output_file_prefix):
+    import pmcs_and_gem5_stats as ps
+    df = df[[x for x in df.columns.values.tolist()]]
+    pmc_compare_a15_df = ps.create_pmc_err_df(df,'a15', 'bigCluster', 'hw stat duration (s)', 'gem5 stat sim_seconds',use_last_if_dup=True)
+    pmc_compare_a15_df.to_csv(output_file_prefix+'-pmc-compare-a15.csv',sep='\t')
+    print pmc_compare_a15_df
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('total MPE') > -1]].mean().to_csv(output_file_prefix+'-pmc-compare-a15-total-mpe.csv',sep='\t')
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('cluster rate MPE') > -1]].mean().to_csv(output_file_prefix+'-pmc-compare-a15-cluster-rate-mpe.csv',sep='\t')
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('total SMPE') > -1]].mean().to_csv(output_file_prefix+'-pmc-compare-a15-total-smpe.csv',sep='\t')
+    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('cluster rate SMPE') > -1]].mean().to_csv(output_file_prefix+'-pmc-compare-a15-cluster-rate-smpe.csv',sep='\t')
+    # now average each cluster normalised values
+    norm_cluster_df = pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values.tolist()]]
+    print norm_cluster_df['workload clusters']
+    unique_clusters = norm_cluster_df['workload clusters'].unique()
+    norm_cluster_cols = ['workload clusters']+[x for x in norm_cluster_df.columns.values.tolist() if x.find('Normalised gem5 ') > -1]
+    final_norm_cluster_df = pd.DataFrame(columns=norm_cluster_cols)
+    for cur_cluster in list(set(unique_clusters)):
+        final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_df['workload clusters'] == cur_cluster][norm_cluster_cols].mean(),ignore_index=True)
+    final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_cols].mean(),ignore_index=True)
+    # rename last row cluster id to 'mean'
+    final_norm_cluster_df['workload clusters'].iloc[-1] = 'mean'
+    final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_df['workload clusters'] != 16][norm_cluster_cols].mean(),ignore_index=True)
+    final_norm_cluster_df['workload clusters'].iloc[-1] = 'mean-no-16'
+    print final_norm_cluster_df
+    final_norm_cluster_df[['workload clusters']+[x for x in final_norm_cluster_df.columns.values.tolist() if x.find('Normalised gem5 ') > -1]].to_csv(output_file_prefix+'-normalised-pmcs-clustered.csv',sep='\t')
+    # now transpose for plotting:
+    norm_pmcs_cols = [x for x in final_norm_cluster_df.columns.values if x.find('Normalised gem5 ') > -1]
+    cluster_vals = final_norm_cluster_df['workload clusters'].tolist()
+    final_norm_cluster_T_df = pd.DataFrame()
+    for c in cluster_vals:
+        #final_norm_cluster_T_df[c] = final_norm_cluster_df[final_norm_cluster_df['workload A15 clusters'] == c][norm_pmcs_cols]
+        final_norm_cluster_T_df[c] = final_norm_cluster_df[final_norm_cluster_df['workload clusters'] == c][norm_pmcs_cols].iloc[0]
+    final_norm_cluster_T_df.index = [x[x.find('Normalised gem5 ')+16:] for x in final_norm_cluster_T_df.index.values]
+    print final_norm_cluster_T_df
+    final_norm_cluster_T_df.to_csv(output_file_prefix+'-normalised-pmcs-clustered_T.csv',sep='\t')
+
+def corr_and_HCA(df, cluster_label, gem5_cluster_label, cor_y, graph_out_prefix_path,corr_only=False):
+    import numpy as np
+    # cluster analysis
+    # get get gem5 per-cluster stats:
+    gem5_sum_cluster_df = 0
+    gem5_sum_cluster_df = make_gem5_cols_per_cluster(df, gem5_cluster_label)
+    xu3_sum_cluster_df = df[[x for x in df.columns.values.tolist() if x.find('hwnew') > -1 and (x.find('total diff') > -1 or x.find('avg rate') > -1) and x.find(cluster_label) > -1]]
+    print('XU3 headings: '+str(xu3_sum_cluster_df.columns.values.tolist()))
+    combined_df = pd.concat([xu3_sum_cluster_df,gem5_sum_cluster_df], axis=1)._get_numeric_data()
+    combined_df = combined_df.fillna(0)
+    combined_df = combined_df.loc[:, (combined_df != 0).any(axis=0)] # remove 0 col
+    combined_df = combined_df.loc[:, (combined_df != combined_df.iloc[0]).any()] 
+    combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if not 0 in combined_df[x].tolist() ]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if combined_df[x].mean() > 5000 ]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if all(i >= 500 for i in combined_df[x].tolist())  ]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values.tolist() if all(i >= 1000000000 for i in combined_df[x].tolist())  ]]
+    #combined_df.to_csv('debug-combined_df.csv', sep='\t')
+    #print combined_df
+    # filter for xu3 rate only:
+    #combined_df = combined_df[[x for x in combined_df.columns.values if x.find('avg rate') > -1]]
+    #combined_df = combined_df[[x for x in combined_df.columns.values if x.find('avg rate') > -1]]
+    combined_df = combined_df[[x for x in combined_df.columns.values if x.find('gem5 stat') > -1]]
+    data = combined_df.values
+    levels_list = []
+    if not corr_only:
+        levels_list = [ 0.18, 0.1]
+        clusters_dfs = []
+        for i in range(0, len(levels_list)):
+            clusters_dfs.append(cluster_analysis(np.transpose(data), combined_df.columns.values.tolist(), levels_list[i], graph_out_prefix_path+'-plot-dendrogram-pmcs-'+str(i)+'.pdf'))
+    # now do correlation analysis and combine with cluster info into one DF
+    from scipy.stats.stats import pearsonr
+    correlation_combined_df = combined_df.apply(lambda x: pearsonr(x,df[cor_y])[0])
+    corr_and_cluster_df = pd.DataFrame({'stat name':correlation_combined_df.index, 'correlation':correlation_combined_df.values})
+    for i in range(0,len(levels_list)):
+        corr_and_cluster_df['cluster '+str(i)+' ('+str(levels_list[i])+')'] = clusters_dfs[i]['Cluster_ID']
+    print corr_and_cluster_df
+    corr_and_cluster_df['neat pmc names'] = corr_and_cluster_df['stat name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15'))
+    #corr_and_cluster_df = corr_and_cluster_df[corr_and_cluster_df['neat pmc names'] != 'not a pmc']
+    corr_and_cluster_df.to_csv(graph_out_prefix_path+'-corr-and-cluster.csv-gem5-only.csv',sep='\t')
+    # now make for forr > 0.3
+    corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.3) | (corr_and_cluster_df['correlation'] < -0.3)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-30.csv',sep='\t')
+    corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.25) | (corr_and_cluster_df['correlation'] < -0.25)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-25.csv',sep='\t')
+
+
+
 
 ####################
 # End: new methods
@@ -567,6 +657,8 @@ if __name__=='__main__':
                     "list with '#'. E.g. '0,1,2,3#4,5,6,7'")
     parser.add_argument('-c', '--cluster_labels',  dest='cluster_labels', required=True, \
                help="Labels the core masks. E.g. 'a7' or 'a7#a15'")
+    parser.add_argument('-g', '--gem5-cluster_labels',  dest='gem5_cluster_labels', required=True, \
+               help="The gem5 cluster name labels E.g. 'littleCluster' or 'littleCluster#bigCluster'")
     parser.add_argument('--wl-cluster-core-mask',  dest='workload_cluster_core_mask', required=False, \
                default='4,5,6,7', \
                help="Specifies the core mask to use for workload clustering")
@@ -581,8 +673,32 @@ if __name__=='__main__':
     convert_old_names_to_new(df)
     core_masks = args.core_mask.split('#')
     cluster_labels = args.cluster_labels.split('#')
+    gem5_cluster_labels = args.gem5_cluster_labels.split('#')
     if len(core_masks) != len(cluster_labels):
         raise ValueError("The number of core masks and cluster labels must be the same!")
+    if len(gem5_cluster_labels) != len(cluster_labels):
+        raise ValueError("The number of gem5 and hw cluster labels must be the same!")
+    clusters_and_labels_string = 'Clusters and labels: '
+    for i in range(0, len(core_masks)):
+        clusters_and_labels_string += cluster_labels[i] + ':'+core_masks[i]+':'+gem5_cluster_labels[i]+',   '
+    print(clusters_and_labels_string)
+    old_cols = df.columns.values.tolist() 
+    for i in range(0, len(core_masks)):
+       create_hw_cluster_average(df,core_masks[i],cluster_labels[i])
+    apply_formulae(df,'gem5-stats.equations',ignore_fails=True)
+    # find the most common number of appearances of workloads
+    most_common_workload_appearance = df['hw stat workload name'].value_counts().tolist()
+    workload_appearance_mode = max(set(most_common_workload_appearance),key=most_common_workload_appearance.count)
+    print("Workload appearance mode: "+str(workload_appearance_mode))
+    workloads_to_remove = [x for x in df['hw stat workload name'].unique() if df['hw stat workload name'].value_counts()[x] != workload_appearance_mode]
+    print ("Workloads to remove:"+str(workloads_to_remove))
+    df = df[~df['hw stat workload name'].isin(workloads_to_remove)]
+    # now remove workloads that are unsuitable for performance evaluation (e.g. 'rl-')
+    df = df[df['hw stat workload name'].str.contains('rl-') == False]
+    rename_workloads(df)
+    print("The following workloads are in the data: ")
+    print(df['hw stat workload name'].tolist())
+    df.to_csv(args.input_file_path+'-applied_formulae.csv',sep='\t')
     clusters_and_labels_string = 'Clusters and labels: '
     for i in range(0, len(core_masks)):
         clusters_and_labels_string += cluster_labels[i] + ':'+core_masks[i]+',   '
@@ -613,7 +729,6 @@ if __name__=='__main__':
     print workload_clustering_df
     wl_cluster_name = 'cluster 1' # which cluster to analyse
     workload_clustering_df = create_exec_time_err_and_wl_cluster_plots(workload_clustering_df, wl_cluster_name, args.input_file_path)
-    #HERE    # print df with workload clusters - for A15
     # for adding the clusters numbers to the main df (added for the power modelling)
     df['workload clusters'] = df['hw stat workload name'].apply(lambda x: workload_clustering_df[workload_clustering_df['wl name'] == x][wl_cluster_name].iloc[0])
     print df
@@ -621,9 +736,9 @@ if __name__=='__main__':
     for i in range(0, len(core_masks)):
         cur_core_mask = core_masks[i]
         cur_cluster_label = cluster_labels[i]
+        cur_gem5_cluster_label = gem5_cluster_labels[i]
         cur_first_core = core_masks[i].split(',')[0]
-        run_validate_on_cluster(df[df['hw stat core mask'] == cur_core_mask],cur_core_mask,cur_cluster_label,cur_first_core,args.input_file_path+'-'+cur_cluster_label+'-')
-        
+        run_validate_on_cluster(df[df['hw stat core mask'] == cur_core_mask],cur_core_mask,cur_cluster_label,cur_first_core,cur_gem5_cluster_label,args.input_file_path+'-'+cur_cluster_label+'-')
     bananna
     #find_stats_per_group(df)
     #print df[important_cols + ['gem5new clock tick diff A15'] +  ['gem5new A15 cycle count diff total'] +  ['gem5new A15 active cycles per cycle'] + ['xu3gem5 A15 cycle count total signed err'] +  ['xu3gemt A15 cycle count no idle total signed err']]
@@ -661,47 +776,6 @@ if __name__=='__main__':
     err_df[err_df['hw stat workload name'].isin(over_100_MAPE)][['hw stat workload name', 'hw stat core mask', 'hw stat Freq (MHz) C4','hwgem5 duration pc err','hwgem5 duration signed err']].to_csv(args.input_file_path+'-over-100-mape.csv')
 
     # HERE
-
-    import pmcs_and_gem5_stats as ps
-    #a15_100_df = df[(df['xu3 stat Freq (MHz) C4'] == 1000) & (df['xu3 stat core mask'] == '4,5,6,7') ]
-    a15_100_df = df_A15_c_n[[x for x in df_A15_c_n.columns.values.tolist()]]
-    pmc_compare_a15_df = ps.create_pmc_err_df(a15_100_df,'a15', 'bigCluster', 'hw stat duration (s)', 'gem5 stat sim_seconds',use_last_if_dup=True)
-    pmc_compare_a15_df.to_csv(args.input_file_path+'-pmc-compare-a15.csv',sep='\t')
-    print pmc_compare_a15_df
-    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('total MPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-total-mpe.csv',sep='\t')
-    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('cluster rate MPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-cluster-rate-mpe.csv',sep='\t')
-    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('total SMPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-total-smpe.csv',sep='\t')
-    pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values if x.find('cluster rate SMPE') > -1]].mean().to_csv(args.input_file_path+'-pmc-compare-a15-cluster-rate-smpe.csv',sep='\t')
-    # now average each cluster normalised values
-    norm_cluster_df = pmc_compare_a15_df[[x for x in pmc_compare_a15_df.columns.values.tolist()]]
-    print norm_cluster_df['workload A15 clusters']
-    unique_clusters = norm_cluster_df['workload A15 clusters'].unique()
-    norm_cluster_cols = ['workload A15 clusters']+[x for x in norm_cluster_df.columns.values.tolist() if x.find('Normalised gem5 ') > -1]
-    final_norm_cluster_df = pd.DataFrame(columns=norm_cluster_cols)
-    for cur_cluster in list(set(unique_clusters)):
-        final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_df['workload A15 clusters'] == cur_cluster][norm_cluster_cols].mean(),ignore_index=True)
-    final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_cols].mean(),ignore_index=True)
-    # rename last row cluster id to 'mean'
-    final_norm_cluster_df['workload A15 clusters'].iloc[-1] = 'mean'
-    final_norm_cluster_df = final_norm_cluster_df.append(norm_cluster_df[norm_cluster_df['workload A15 clusters'] != 16][norm_cluster_cols].mean(),ignore_index=True)
-    final_norm_cluster_df['workload A15 clusters'].iloc[-1] = 'mean-no-16'
-    print final_norm_cluster_df
-    final_norm_cluster_df[['workload A15 clusters']+[x for x in final_norm_cluster_df.columns.values.tolist() if x.find('Normalised gem5 ') > -1]].to_csv(args.input_file_path+'-normalised-pmcs-clustered.csv',sep='\t')
-    # now transpose for plotting:
-    norm_pmcs_cols = [x for x in final_norm_cluster_df.columns.values if x.find('Normalised gem5 ') > -1]
-    cluster_vals = final_norm_cluster_df['workload A15 clusters'].tolist()
-    final_norm_cluster_T_df = pd.DataFrame()
-    for c in cluster_vals:
-        #final_norm_cluster_T_df[c] = final_norm_cluster_df[final_norm_cluster_df['workload A15 clusters'] == c][norm_pmcs_cols]
-        final_norm_cluster_T_df[c] = final_norm_cluster_df[final_norm_cluster_df['workload A15 clusters'] == c][norm_pmcs_cols].iloc[0]
-    final_norm_cluster_T_df.index = [x[x.find('Normalised gem5 ')+16:] for x in final_norm_cluster_T_df.index.values]
-    print final_norm_cluster_T_df
-    final_norm_cluster_T_df.to_csv(args.input_file_path+'-normalised-pmcs-clustered_T.csv',sep='\t')
-    tigermoth
-
-    
-    corr_and_cluster_analysis(df, '4,5,6,7', 1000, 1000, 'hwgem5 duration signed err', args.input_file_path+'-cluster')
-    corr_and_cluster_analysis(df, '0,1,2,3', 1000, 1000, 'hwgem5 duration signed err', args.input_file_path+'-A7-cluster',corr_only=True)
     #build_model(df, '4,5,6,7', 1000, 1000, 'xu3gem5 duration signed err',[x for x in df.columns.values.tolist() if (x.find('xu3new') > -1 and x.find('a15') > -1) or (x.find('gem5 stat') > -1)],10)
     df['duration diff'] = df['hw stat duration (s)'] - df['gem5 stat sim_seconds']
     #build_model(df, '4,5,6,7', 1000, 1000, 'duration diff',[x for x in df.columns.values.tolist() if (x.find('xu3new') > -1 and x.find('a15') > -1) ],10)

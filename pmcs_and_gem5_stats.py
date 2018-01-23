@@ -61,7 +61,7 @@ def create_pmc_err_df(df, hw_cluster_id, gem5_cluster_id, hw_duration_col, gem5_
     # get pmcs, order, and filter out negative:
     ordered_pmc_ints = sorted(list(set([x for x in pmcs_df['INT_PMC_ID'] if x >= 0])))
     print(ordered_pmc_ints)
-    result_df = df[apply_formulae.important_cols+['workload A15 clusters']] # hack include clusters
+    result_df = df[validation.important_cols+['workload clusters']] # hack include clusters
     for pmc_int in ordered_pmc_ints:
         temp_pmcs_df = pmcs_df[pmcs_df['INT_PMC_ID'] == pmc_int]
         print temp_pmcs_df
