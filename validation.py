@@ -154,13 +154,16 @@ def run_validate_on_cluster(df, core_mask, cluster_label, first_core_num, gem5_c
         },ignore_index=True)
         # Do the correlation and HCA analysis:
         #corr_and_HCA(df, cur_cluster_label, cur_gem5_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-corr-and-HCA-')
-        corr_and_HCA_hw(df, cur_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-'+cur_cluster_label+'-corr-and-HCA-')
+        cluster_and_freq_label = cur_cluster_label+'-f'+str(freq)+'MHz'
+        corr_and_HCA_hw(df, cur_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-'+cluster_and_freq_label+'-avg-rate-corr-and-HCA-', input_keys=['avg rate'])
+        corr_and_HCA_hw(df, cur_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-'+cluster_and_freq_label+'-total-diff-corr-and-HCA-', input_keys=['total diff'])
+        corr_and_HCA_gem5(df, cur_gem5_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-'+cluster_and_freq_label+'-total-diff-corr-and-HCA-')
         # Create HW PMC vs. gem5 event comparison
         compare_hw_pmcs_and_gem5_events(
                   df[df['hw stat Freq (MHz) C'+cur_first_core+''] == freq], 
-                  output_file_prefix+'pmc-compare-f'+str(freq)+'MHz-'
+                  output_file_prefix+'pmc-compare-'+cluster_and_freq_label+'-'
         )
-    error_df.to_csv(output_file_prefix+'error-table.csv',sep='\t')
+    error_df.to_csv(output_file_prefix+'-'+cur_cluster_label+'-error-table.csv',sep='\t')
 
 def create_exec_time_err_and_wl_cluster_plots(wl_cluster_df, wl_cluster_name, output_file_prefix):
     # NEW CORR ANALYSIS
@@ -240,7 +243,6 @@ def compare_hw_pmcs_and_gem5_events(df,output_file_prefix):
     print final_norm_cluster_T_df
     final_norm_cluster_T_df.to_csv(output_file_prefix+'-normalised-pmcs-clustered_T.csv',sep='\t')
 
-
 def corr_and_HCA_hw(df, cluster_label, cor_y, graph_out_prefix_path, input_keys=['avg rate'], corr_only=False):
     import numpy as np
     # only uses hwnew so it uses the CPU cluster average, not the individual core values
@@ -269,11 +271,39 @@ def corr_and_HCA_hw(df, cluster_label, cor_y, graph_out_prefix_path, input_keys=
         corr_and_cluster_df['cluster '+str(i)+' ('+str(levels_list[i])+')'] = clusters_dfs[i]['Cluster_ID']
     print corr_and_cluster_df
     corr_and_cluster_df['neat pmc names'] = corr_and_cluster_df['stat name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,cluster_label))
-    #corr_and_cluster_df = corr_and_cluster_df[corr_and_cluster_df['neat pmc names'] != 'not a pmc']
+    corr_and_cluster_df = corr_and_cluster_df[corr_and_cluster_df['neat pmc names'] != 'not a pmc']
     corr_and_cluster_df.to_csv(graph_out_prefix_path+'hw-corr-and-cluster.csv',sep='\t')
+
+def corr_and_HCA_gem5(df, gem5_cluster_label, cor_y, graph_out_prefix_path, corr_only=False):
+    import numpy as np
+    gem5_df = make_gem5_cols_per_cluster(df, gem5_cluster_label)
+    # now convert data to correct formate for cluster analysis and remove any problematic columns
+    gem5_df = gem5_df.fillna(0)
+    gem5_df = gem5_df.loc[:, (gem5_df != 0).any(axis=0)] # remove 0 col
+    gem5_df = gem5_df.loc[:, (gem5_df != gem5_df.iloc[0]).any()] 
+    gem5_df = gem5_df[[x for x in gem5_df.columns.values.tolist() if not 0 in gem5_df[x].tolist() ]]
+    #gem5_df = gem5_df[[x for x in gem5_df.columns.values.tolist() if gem5_df[x].mean() > 5000 ]]
+    #gem5_df = gem5_df[[x for x in gem5_df.columns.values.tolist() if all(i >= 500 for i in gem5_df[x].tolist())  ]]
+    #gem5_df = gem5_df[[x for x in gem5_df.columns.values.tolist() if all(i >= 1000000000 for i in gem5_df[x].tolist())  ]]
+    data = gem5_df.values
+    level_list = []
+    if not corr_only:
+        levels_list = [ 0.18, 0.1]
+        clusters_dfs = []
+        for i in range(0, len(levels_list)):
+            clusters_dfs.append(cluster_analysis(np.transpose(data), gem5_df.columns.values.tolist(), levels_list[i], graph_out_prefix_path+'-plot-dendrogram-pmcs-'+str(i)+'.pdf'))
+    # now do correlation analysis and combine with cluster info into one DF
+    from scipy.stats.stats import pearsonr
+    correlation_combined_df = gem5_df.apply(lambda x: pearsonr(x,df[cor_y])[0])
+    corr_and_cluster_df = pd.DataFrame({'stat name':correlation_combined_df.index, 'correlation':correlation_combined_df.values})
+    for i in range(0,len(levels_list)):
+        corr_and_cluster_df['cluster '+str(i)+' ('+str(levels_list[i])+')'] = clusters_dfs[i]['Cluster_ID']
+    print corr_and_cluster_df
+    corr_and_cluster_df['neat pmc names'] = corr_and_cluster_df['stat name']
+    corr_and_cluster_df.to_csv(graph_out_prefix_path+'gem5-corr-and-cluster.csv',sep='\t')
     # now make for forr > 0.3
-    #corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.3) | (corr_and_cluster_df['correlation'] < -0.3)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-30.csv',sep='\t')
-    #corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.25) | (corr_and_cluster_df['correlation'] < -0.25)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-25.csv',sep='\t')
+    corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.3) | (corr_and_cluster_df['correlation'] < -0.3)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-30.csv',sep='\t')
+    corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.25) | (corr_and_cluster_df['correlation'] < -0.25)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-25.csv',sep='\t')
     
 
 # works on both the xu3 stats and gem5 stats
