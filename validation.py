@@ -153,7 +153,8 @@ def run_validate_on_cluster(df, core_mask, cluster_label, first_core_num, gem5_c
                    ))
         },ignore_index=True)
         # Do the correlation and HCA analysis:
-        corr_and_HCA(df, cur_cluster_label, cur_gem5_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-corr-and-HCA-')
+        #corr_and_HCA(df, cur_cluster_label, cur_gem5_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-corr-and-HCA-')
+        corr_and_HCA_hw(df, cur_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-'+cur_cluster_label+'-corr-and-HCA-')
         # Create HW PMC vs. gem5 event comparison
         compare_hw_pmcs_and_gem5_events(
                   df[df['hw stat Freq (MHz) C'+cur_first_core+''] == freq], 
@@ -239,6 +240,43 @@ def compare_hw_pmcs_and_gem5_events(df,output_file_prefix):
     print final_norm_cluster_T_df
     final_norm_cluster_T_df.to_csv(output_file_prefix+'-normalised-pmcs-clustered_T.csv',sep='\t')
 
+
+def corr_and_HCA_hw(df, cluster_label, cor_y, graph_out_prefix_path, input_keys=['avg rate'], corr_only=False):
+    import numpy as np
+    # only uses hwnew so it uses the CPU cluster average, not the individual core values
+    hw_df = df[[x for x in df.columns.values.tolist() if x.find('hwnew') > -1 and any([x.find(y) > -1 for y in input_keys]) and x.find(cluster_label) > -1]]
+    print('HW headings: '+str(hw_df.columns.values.tolist()))
+    # now convert data to correct formate for cluster analysis and remove any problematic columns
+    hw_df = hw_df.fillna(0)
+    hw_df = hw_df.loc[:, (hw_df != 0).any(axis=0)] # remove 0 col
+    hw_df = hw_df.loc[:, (hw_df != hw_df.iloc[0]).any()] 
+    hw_df = hw_df[[x for x in hw_df.columns.values.tolist() if not 0 in hw_df[x].tolist() ]]
+    #hw_df = hw_df[[x for x in hw_df.columns.values.tolist() if hw_df[x].mean() > 5000 ]]
+    #hw_df = hw_df[[x for x in hw_df.columns.values.tolist() if all(i >= 500 for i in hw_df[x].tolist())  ]]
+    #hw_df = hw_df[[x for x in hw_df.columns.values.tolist() if all(i >= 1000000000 for i in hw_df[x].tolist())  ]]
+    data = hw_df.values
+    level_list = []
+    if not corr_only:
+        levels_list = [ 0.18, 0.1]
+        clusters_dfs = []
+        for i in range(0, len(levels_list)):
+            clusters_dfs.append(cluster_analysis(np.transpose(data), hw_df.columns.values.tolist(), levels_list[i], graph_out_prefix_path+'-plot-dendrogram-pmcs-'+str(i)+'.pdf'))
+    # now do correlation analysis and combine with cluster info into one DF
+    from scipy.stats.stats import pearsonr
+    correlation_combined_df = hw_df.apply(lambda x: pearsonr(x,df[cor_y])[0])
+    corr_and_cluster_df = pd.DataFrame({'stat name':correlation_combined_df.index, 'correlation':correlation_combined_df.values})
+    for i in range(0,len(levels_list)):
+        corr_and_cluster_df['cluster '+str(i)+' ('+str(levels_list[i])+')'] = clusters_dfs[i]['Cluster_ID']
+    print corr_and_cluster_df
+    corr_and_cluster_df['neat pmc names'] = corr_and_cluster_df['stat name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,cluster_label))
+    #corr_and_cluster_df = corr_and_cluster_df[corr_and_cluster_df['neat pmc names'] != 'not a pmc']
+    corr_and_cluster_df.to_csv(graph_out_prefix_path+'hw-corr-and-cluster.csv',sep='\t')
+    # now make for forr > 0.3
+    #corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.3) | (corr_and_cluster_df['correlation'] < -0.3)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-30.csv',sep='\t')
+    #corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.25) | (corr_and_cluster_df['correlation'] < -0.25)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-25.csv',sep='\t')
+    
+
+# works on both the xu3 stats and gem5 stats
 def corr_and_HCA(df, cluster_label, gem5_cluster_label, cor_y, graph_out_prefix_path,corr_only=False):
     import numpy as np
     # cluster analysis
@@ -647,8 +685,11 @@ def create_xu3_cluster_average(df):
 if __name__=='__main__':
     import argparse
     import os
+    import sys
     import pandas as pd
     parser = argparse.ArgumentParser()
+    parser.add_argument('--clean', dest='clean', required=False, action='store_true')
+    parser.set_defaults(clean=False)
     parser.add_argument('-i', '--input',  dest='input_file_path', required=True, \
                help="The stats df on which to apply the formulae")
     parser.add_argument('-m', '--core-mask',  dest='core_mask', required=True, \
@@ -669,6 +710,23 @@ if __name__=='__main__':
                default='a15', \
                help="Specifies the cluster (e.g. a15) to use for workload clustering")
     args=parser.parse_args()
+    if args.clean:
+        print("Cleaning...")
+        clean_dir = os.path.dirname(args.input_file_path)
+        # check if input file is valid
+        if not os.path.isfile(args.input_file_path):
+            raise ValueError("The supplied input file ("+args.input_file_path+") does not exist!")
+        input_filename = (os.path.basename(args.input_file_path))
+        print("Removing all analysis files from "+clean_dir+" except "+input_filename)
+        files_to_delete = [x for x in os.listdir(clean_dir) if x != input_filename]
+        print("Not deleting: "+str([x for x in os.listdir(clean_dir) if x not in files_to_delete]))
+        print("DELETING: "+str(files_to_delete))
+        for f in files_to_delete:
+            del_path = os.path.join(clean_dir,f)
+            print("Deleting: "+del_path)
+            os.remove(del_path)
+        sys.exit(0)
+        
     df = pd.read_csv(args.input_file_path,sep='\t')
     convert_old_names_to_new(df)
     core_masks = args.core_mask.split('#')
