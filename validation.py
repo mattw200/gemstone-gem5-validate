@@ -163,6 +163,12 @@ def run_validate_on_cluster(df, core_mask, cluster_label, first_core_num, gem5_c
                   df[df['hw stat Freq (MHz) C'+cur_first_core+''] == freq], 
                   output_file_prefix+'pmc-compare-'+cluster_and_freq_label+'-'
         )
+        # (regression) model building:
+        col_filter_hw = lambda f : [x for x in f.columns.values.tolist() if x.find('hwnew ') > -1 ]
+        col_filter_gem5 = lambda f : [x for x in f.columns.values.tolist() if x.find('gem5 stat ') > -1 ]
+        df['duration diff'] = df['hw stat duration (s)'] - df['gem5 stat sim_seconds']
+        build_model(df, cur_gem5_cluster_label,  'duration diff',col_filter_hw,10,args.input_file_path+'-'+cluster_and_freq_label+'-model-build-hw-')
+        build_model(df, cur_gem5_cluster_label,  'duration diff',col_filter_gem5,10,args.input_file_path+'-'+cluster_and_freq_label+'-model-build-gem5-')
     error_df.to_csv(output_file_prefix+'-'+cur_cluster_label+'-error-table.csv',sep='\t')
 
 def create_exec_time_err_and_wl_cluster_plots(wl_cluster_df, wl_cluster_name, output_file_prefix):
@@ -297,10 +303,13 @@ def corr_and_HCA_gem5(df, gem5_cluster_label, cor_y, graph_out_prefix_path, corr
     correlation_combined_df = gem5_df.apply(lambda x: pearsonr(x,df[cor_y])[0])
     corr_and_cluster_df = pd.DataFrame({'stat name':correlation_combined_df.index, 'correlation':correlation_combined_df.values})
     for i in range(0,len(levels_list)):
-        corr_and_cluster_df['cluster '+str(i)+' ('+str(levels_list[i])+')'] = clusters_dfs[i]['Cluster_ID']
+        corr_and_cluster_df['cluster '+str(i)] = clusters_dfs[i]['Cluster_ID']
     print corr_and_cluster_df
     corr_and_cluster_df['neat pmc names'] = corr_and_cluster_df['stat name']
     corr_and_cluster_df.to_csv(graph_out_prefix_path+'gem5-corr-and-cluster.csv',sep='\t')
+    sort_col = [x for x in corr_and_cluster_df.columns.values.tolist() if x.find('cluster 1') > -1][0]
+    corr_and_cluster_df[sort_col] = corr_and_cluster_df[sort_col].apply(pd.to_numeric)
+    corr_and_cluster_df.sort_values(by=[sort_col]).to_csv(graph_out_prefix_path+'gem5-corr-and-cluster-sorted.csv',sep='\t')
     # now make for forr > 0.3
     corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.3) | (corr_and_cluster_df['correlation'] < -0.3)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-30.csv',sep='\t')
     corr_and_cluster_df[(corr_and_cluster_df['correlation'] > 0.25) | (corr_and_cluster_df['correlation'] < -0.25)].to_csv(graph_out_prefix_path+'-corr-and-cluster-ovr-25.csv',sep='\t')
@@ -430,92 +439,7 @@ def cluster_analysis(data, labels, level, filepath,show_plot=False):
     return clusters_df
 
 
-def build_model(df, core_mask, freq_C0, freq_C4, y_col,var_select_func,num_inputs,filepath_prefix):
-    #import statsmodels.formula.api as smf
-    import statsmodels.api as sm
-    import math
-    temp_df = df[(df['hw stat core mask'] == core_mask) & (df['hw stat Freq (MHz) C0'] == freq_C0) & (df['hw stat Freq (MHz) C4'] == freq_C4)]
-    # remove gem5 stats and re-inster them 'per cluster
-    gem5_cluster = 'bigCluster'
-    if core_mask == '4,5,6,7':
-        gem5_cluster = 'bigCluster'
-    elif core_mask == '0,1,2,3':
-        gem5_cluster = 'littleCluster'
-    else:
-        raise ValueError("Unrecognised core mask!")
-    gem5_per_cluster  = make_gem5_cols_per_cluster(temp_df, gem5_cluster)
-    temp_df = temp_df[[x for x in temp_df.columns.values if x.find('gem5 stat') == -1]]
-    temp_df = pd.concat([temp_df, gem5_per_cluster], axis=1)
-    temp_df =  temp_df._get_numeric_data().fillna(0)
-    temp_df = temp_df.fillna(0)
-    temp_df = temp_df.loc[:, (temp_df != 0).any(axis=0)] # remove 0 col
-    temp_df = temp_df.loc[:, (temp_df != temp_df.ix[0]).any()] 
-    temp_df = temp_df[[x for x in temp_df.columns.values.tolist() if not 0 in temp_df[x].tolist() ]]
-    temp_df['const'] = 1
-    # get var names:
-    var_names = var_select_func(temp_df)
-    model_inputs = []
-    #model_inputs.append('const')
-    models = []
-    for i in range(0, num_inputs):
-        best_r2 = 0
-        best_var = ''
-        best_model_res = 0
-        var_names = [x for x in var_names if x in temp_df.columns.values.tolist() and x != y_col]
-        
-        for var in var_names:
-            dep_vars = model_inputs + [var]
-            print ("Trying with these vars: "+str(dep_vars))
-            #formula = ''+y_col+' ~ '+' + '.join(["Q('"+x+"')" for x in dep_vars])+' '
-            #print(formula)
-            #mod = smf.ols(formula=formula,data=temp_df)
-            X = temp_df[dep_vars]
-            y = temp_df[y_col]
-            #X = sm.add_constant(X) # use const
-            res = sm.OLS(y,X).fit()
-            r2 = res.rsquared 
-            print res.summary()
-            if r2 > best_r2:
-                best_r2 = r2
-                best_var = var
-                best_model_res = res
-        model_inputs.append(best_var)
-        models.append(best_model_res)
-    model_summary_df = pd.DataFrame(columns=['number_of_events', 'R2', 'adjR2', 'WAPE'])
-    for i in range(0, len(models)):
-        model = models[i]
-        print "\nMODEL"
-        print ("r2: "+str(model.rsquared))
-        print ("params: "+(str(model.params)))
-        print ("Predict:")
-        print model.predict()
-        print ("MAPE: "+str(mape(temp_df[y_col],model.predict()).mean()))
-        print ("MAPE: ")
-        print mape(temp_df[y_col], model.predict())
-        print ("Actual: ")
-        print temp_df[y_col]
-        print "Predicted:"
-        print model.predict()
-        print "WAPE:"
-        print wape(temp_df[y_col],model.predict())
-        print model.summary()
-        model_summary_df = model_summary_df.append({
-                'number_of_events' : i,
-                'R2' : model.rsquared,
-                'adjR2' : model.rsquared_adj,
-                'WAPE' :  wape(temp_df[y_col],model.predict()),
-                'SER' : math.sqrt(model.scale)
-                },ignore_index=True)
-        #params_df = pd.concat([model.params, model.pvalues], axis=1)
-        params_df = pd.DataFrame(columns=['Name', 'Value', 'p-Value'])
-        params_df['Name'] = model.params.index
-        params_df['Value'] = model.params.tolist()
-        params_df['p-Value'] = model.pvalues.tolist()
-        params_df['pretty name'] = params_df['Name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (total)' if x.find('total diff') > -1  else pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (rate)')
-        params_df.to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
-        #model.params.append(model.pvalues).to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
-    model_summary_df.to_csv(filepath_prefix+'-model-summary'+'.csv',sep='\t')
-                
+               
 
 def workload_clustering(df, core_mask, freq_C0,freq_C4, graph_out_prefix_path):
     import numpy as np
@@ -712,6 +636,96 @@ def create_xu3_cluster_average(df):
        df['hwnew a15 '+pmc+' total diff'] = df[[x for x in cols_to_avg if x.find('diff') > -1]].sum(axis=1)
        df['hwnew a15 '+pmc+' avg rate'] = df[[x for x in cols_to_avg if x.find('rate') > -1]].mean(axis=1)
 
+def build_model(df, gem5_cluster,  y_col,var_select_func,num_inputs,filepath_prefix):
+    #import statsmodels.formula.api as smf
+    import statsmodels.api as sm
+    import math
+    temp_df = df[[x for x in df.columns.values]]
+    '''
+    temp_df = df[(df['hw stat core mask'] == core_mask) & (df['hw stat Freq (MHz) C0'] == freq_C0) & (df['hw stat Freq (MHz) C4'] == freq_C4)]
+    # remove gem5 stats and re-inster them 'per cluster
+    gem5_cluster = 'bigCluster'
+    if core_mask == '4,5,6,7':
+        gem5_cluster = 'bigCluster'
+    elif core_mask == '0,1,2,3':
+        gem5_cluster = 'littleCluster'
+    else:
+        raise ValueError("Unrecognised core mask!")
+    '''
+    gem5_per_cluster  = make_gem5_cols_per_cluster(temp_df, gem5_cluster)
+    temp_df = temp_df[[x for x in temp_df.columns.values if x.find('gem5 stat') == -1]]
+    temp_df = pd.concat([temp_df, gem5_per_cluster], axis=1)
+    temp_df =  temp_df._get_numeric_data().fillna(0)
+    temp_df = temp_df.fillna(0)
+    temp_df = temp_df.loc[:, (temp_df != 0).any(axis=0)] # remove 0 col
+    temp_df = temp_df.loc[:, (temp_df != temp_df.ix[0]).any()] 
+    temp_df = temp_df[[x for x in temp_df.columns.values.tolist() if not 0 in temp_df[x].tolist() ]]
+    temp_df['const'] = 1
+    # get var names:
+    var_names = var_select_func(temp_df)
+    model_inputs = ['const']
+    #model_inputs.append('const')
+    models = []
+    for i in range(0, num_inputs):
+        best_r2 = 0
+        best_var = ''
+        best_model_res = 0
+        var_names = [x for x in var_names if x in temp_df.columns.values.tolist() and x != y_col]
+        
+        for var in var_names:
+            dep_vars = model_inputs + [var]
+            print ("Trying with these vars: "+str(dep_vars))
+            #formula = ''+y_col+' ~ '+' + '.join(["Q('"+x+"')" for x in dep_vars])+' '
+            #print(formula)
+            #mod = smf.ols(formula=formula,data=temp_df)
+            X = temp_df[dep_vars]
+            y = temp_df[y_col]
+            #X = sm.add_constant(X) # use const
+            res = sm.OLS(y,X).fit()
+            r2 = res.rsquared 
+            print res.summary()
+            if r2 > best_r2:
+                best_r2 = r2
+                best_var = var
+                best_model_res = res
+        model_inputs.append(best_var)
+        models.append(best_model_res)
+    model_summary_df = pd.DataFrame(columns=['number_of_events', 'R2', 'adjR2', 'WAPE'])
+    for i in range(0, len(models)):
+        model = models[i]
+        print "\nMODEL"
+        print ("r2: "+str(model.rsquared))
+        print ("params: "+(str(model.params)))
+        print ("Predict:")
+        print model.predict()
+        print ("MAPE: "+str(mape(temp_df[y_col],model.predict()).mean()))
+        print ("MAPE: ")
+        print mape(temp_df[y_col], model.predict())
+        print ("Actual: ")
+        print temp_df[y_col]
+        print "Predicted:"
+        print model.predict()
+        print "WAPE:"
+        print wape(temp_df[y_col],model.predict())
+        print model.summary()
+        model_summary_df = model_summary_df.append({
+                'number_of_events' : i,
+                'R2' : model.rsquared,
+                'adjR2' : model.rsquared_adj,
+                'WAPE' :  wape(temp_df[y_col],model.predict()),
+                'SER' : math.sqrt(model.scale)
+                },ignore_index=True)
+        #params_df = pd.concat([model.params, model.pvalues], axis=1)
+        params_df = pd.DataFrame(columns=['Name', 'Value', 'p-Value'])
+        params_df['Name'] = model.params.index
+        params_df['Value'] = model.params.tolist()
+        params_df['p-Value'] = model.pvalues.tolist()
+        params_df['pretty name'] = params_df['Name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (total)' if x.find('total diff') > -1  else pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (rate)')
+        params_df.to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
+        #model.params.append(model.pvalues).to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
+    model_summary_df.to_csv(filepath_prefix+'-model-summary'+'.csv',sep='\t')
+ 
+
 if __name__=='__main__':
     import argparse
     import os
@@ -827,6 +841,7 @@ if __name__=='__main__':
         cur_gem5_cluster_label = gem5_cluster_labels[i]
         cur_first_core = core_masks[i].split(',')[0]
         run_validate_on_cluster(df[df['hw stat core mask'] == cur_core_mask],cur_core_mask,cur_cluster_label,cur_first_core,cur_gem5_cluster_label,args.input_file_path+'-'+cur_cluster_label+'-')
+    # now do regression analysis
     bananna
     #find_stats_per_group(df)
     #print df[important_cols + ['gem5new clock tick diff A15'] +  ['gem5new A15 cycle count diff total'] +  ['gem5new A15 active cycles per cycle'] + ['xu3gem5 A15 cycle count total signed err'] +  ['xu3gemt A15 cycle count no idle total signed err']]
