@@ -152,8 +152,14 @@ def run_validate_on_cluster(df, core_mask, cluster_label, first_core_num, gem5_c
                        'gem5 stat sim_seconds'
                    ))
         },ignore_index=True)
+        # NEW: only do this at the specified frequency and core mask!!!!!!! - otherwise to many plots
+        if freq != args.workload_cluster_freq or cur_core_mask != args.workload_cluster_core_mask:
+            print("FREQ:"+str(freq))
+            print("Cur mask:"+str(cur_core_mask))
+            print("workload cluster freq: "+str(args.workload_cluster_freq))
+            print("workload cluster core mask: "+args.workload_cluster_core_mask)
+            continue
         # Do the correlation and HCA analysis:
-        #corr_and_HCA(df, cur_cluster_label, cur_gem5_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-corr-and-HCA-')
         cluster_and_freq_label = cur_cluster_label+'-f'+str(freq)+'MHz'
         corr_and_HCA_hw(df, cur_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-'+cluster_and_freq_label+'-avg-rate-corr-and-HCA-', input_keys=['avg rate'])
         corr_and_HCA_hw(df, cur_cluster_label, 'hwgem5 duration signed err', output_file_prefix+'-'+cluster_and_freq_label+'-total-diff-corr-and-HCA-', input_keys=['total diff'])
@@ -722,6 +728,8 @@ def build_model(df, gem5_cluster,  y_col,var_select_func,num_inputs,filepath_pre
         params_df['p-Value'] = model.pvalues.tolist()
         params_df['pretty name'] = params_df['Name'].apply(lambda x: pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (total)' if x.find('total diff') > -1  else pmcs_and_gem5_stats.get_lovely_pmc_name(x,'a15')+' (rate)')
         params_df.to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
+        if i == len(models) -1:
+            params_df.to_csv(filepath_prefix+'-model-final.csv',sep='\t')
         #model.params.append(model.pvalues).to_csv(filepath_prefix+'-model-'+str(i)+'.csv',sep='\t')
     model_summary_df.to_csv(filepath_prefix+'-model-summary'+'.csv',sep='\t')
  
