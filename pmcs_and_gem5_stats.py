@@ -6,10 +6,15 @@
 # Deals with PMC names and finding gem5 equivalents
 import numpy as np
 import pandas as pd
+pd.options.mode.chained_assignment = None
 import math
 import compare
 #import apply_formulae
 import validation
+
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def get_lovely_pmc_name(existing_name, hw_cluster_id):
     hex_val = existing_name.find('0x')
@@ -17,7 +22,7 @@ def get_lovely_pmc_name(existing_name, hw_cluster_id):
         return 'not a pmc'
         #raise ValueError("Can't find the PMC hex value")
     hex_val = '0x'+existing_name[hex_val+2:hex_val+4].upper()
-    print("Hex val: "+str(hex_val))
+    #print("Hex val: "+str(hex_val))
     pmcs_df = get_pmcs_df(hw_cluster_id)
     pmcs_df = pmcs_df[pmcs_df['PMC_ID'] == hex_val]
     if len(pmcs_df.index) < 1:
@@ -28,7 +33,7 @@ def get_lovely_pmc_name(existing_name, hw_cluster_id):
 
 def get_new_stat(df, equation):
     import pandas as pd
-    print ("Getting new stat: with formula: "+equation)
+    #logger.info("Getting new stat: with formula: "+equation)
     return pd.eval(equation,engine='python')
 
 def get_pmcs_df(hw_cluster_id):
@@ -47,7 +52,7 @@ def process_gem5_equiv_stat(df, result_name, gem5_eq):
         # repeat four times with the different cpus
         gem5_eq = gem5_eq.replace('cpusX','cpus0')+' + '+gem5_eq.replace('cpusX','cpus1')+' + ' \
                 +gem5_eq.replace('cpusX','cpus2')+' + '+gem5_eq.replace('cpusX','cpus3')
-    print("The processed equation: "+gem5_eq)
+    #print("The processed equation: "+gem5_eq)
     new_df = pd.DataFrame()
     new_df[result_name] = get_new_stat(df, gem5_eq)
     return new_df
@@ -60,20 +65,20 @@ def create_pmc_err_df(df, hw_cluster_id, gem5_cluster_id, hw_duration_col, gem5_
     pmcs_df['INT_PMC_ID'] = pmcs_df['PMC_ID'].apply(lambda x:  int(x,0))
     # get pmcs, order, and filter out negative:
     ordered_pmc_ints = sorted(list(set([x for x in pmcs_df['INT_PMC_ID'] if x >= 0])))
-    print(ordered_pmc_ints)
+    #print(ordered_pmc_ints)
     result_df = df[validation.important_cols+['workload clusters']] # hack include clusters
     for pmc_int in ordered_pmc_ints:
         temp_pmcs_df = pmcs_df[pmcs_df['INT_PMC_ID'] == pmc_int]
-        print temp_pmcs_df
+        #print temp_pmcs_df
         if len(temp_pmcs_df) > 1:
-            print("Found multiple entries for the same PMC: "+str(pmc_int)+" ("+str(hex(pmc_int))+")")
+            logger.info("Found multiple entries for the same PMC: "+str(pmc_int)+" ("+str(hex(pmc_int))+")")
             if not use_last_if_dup: 
                 raise ValueError("ERROR: Found multiple entries for the same PMC: "+str(pmc_int)+" ("+str(hex(pmc_int))+")")
             else:
                 # use the last one entered
-                print("Using last value...")
+                logger.info("Using last value...")
                 temp_pmcs_df = temp_pmcs_df[temp_pmcs_df.index == temp_pmcs_df.index[-1]]
-        print temp_pmcs_df
+        #print temp_pmcs_df
         # skip if there is no gem5 equation for this stat
         if temp_pmcs_df['gem5 equivalent'].iloc[0] == 'None':
             continue
@@ -82,7 +87,7 @@ def create_pmc_err_df(df, hw_cluster_id, gem5_cluster_id, hw_duration_col, gem5_
         selected_col = [x for x in hw_cols if x.find(temp_pmcs_df['PMC_ID'].iloc[0]) > -1]
         if len(selected_col) != 1:
             raise ValueError("Length of selected_col should be 1!: "+str(selected_col))
-        print selected_col
+        logger.info("Selected cols: "+str( selected_col))
         # now process gem5 column
         name_of_hw_col = 'HW '+hw_cluster_id+' PMC total '+str(temp_pmcs_df['PMC_ID'].iloc[0])+':'+str(temp_pmcs_df['NAME'].iloc[0])
         result_df[name_of_hw_col] = df[selected_col]

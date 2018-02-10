@@ -15,8 +15,13 @@ xu3_formulae_path = 'xu3-stats.equations'
 xu3_col_prefix = 'hw stat '
 gem5_col_prefix = 'gem5 stat '
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 def combine_xu3_and_gem5(xu3_df, gem5_df, model):
     import pandas as pd
+    logger.info("Combining...")
 
     # filter
     gem5_df = gem5_df[gem5_df['gem5 stat workloads preset'] != 'parmibench'] # parmibench replaced by parmibenchA, parmibenchB, and parmibenchC
@@ -29,30 +34,33 @@ def combine_xu3_and_gem5(xu3_df, gem5_df, model):
     # match on: workload,freq combination, core mask, model
     failed_finds = []
     temp_list = xu3_df.columns.values.tolist() + gem5_df.columns.values.tolist()
-    print temp_list
-    print("Length of temp list: "+str(len(temp_list)))
+    #print temp_list
+    #print("Length of temp list: "+str(len(temp_list)))
     combined_df = pd.DataFrame(columns=temp_list)
 
     # go through the xu3 experiment - it is reliable etc.
     for xu3_i in range(0, len(xu3_df.index)):
-        print xu3_df.columns.values
+        logger.info("Processing HW DF row: "+str(xu3_i))
+        #print xu3_df.columns.values
         workload_name = xu3_df[xu3_col_prefix+'workload name'].iloc[xu3_i]
         a7_freq = xu3_df[xu3_col_prefix+'Freq (MHz) C0'].iloc[xu3_i]
         a15_freq = xu3_df[xu3_col_prefix+'Freq (MHz) C4'].iloc[xu3_i]
         core_mask = xu3_df[xu3_col_prefix+'core mask'].iloc[xu3_i]
         # now go through the gem5 df to find the equivalent
-        print("Looking for: "+str(workload_name)+", "+str(core_mask)+", "+str(a7_freq)+"-"+str(a15_freq))
+        logger.info("Looking for: "+str(workload_name)+", "+str(core_mask)+", "+str(a7_freq)+"-"+str(a15_freq))
         filtered_df = gem5_df[gem5_df[gem5_col_prefix+'model name'] == model]
         filtered_df = filtered_df[filtered_df[gem5_col_prefix+'workload name'] == workload_name]
         filtered_df = filtered_df[filtered_df[gem5_col_prefix+'core mask'] == core_mask]
         filtered_df = filtered_df[filtered_df[gem5_col_prefix+'A7 Freq (MHz)'] == a7_freq]
         filtered_df = filtered_df[filtered_df[gem5_col_prefix+'A15 Freq (MHz)'] == a15_freq]
-        print filtered_df
+        #print filtered_df
         if len(filtered_df.index) == 0:
             # not found
             failed_finds.append([model,workload_name,core_mask,a7_freq,a15_freq])
+            logger.info("Not Found! Moving on...")
             continue
         elif len(filtered_df.index) > 1:
+            logging.info("Multiple finds...Letting the user choose one...")
             filtered_presets = filtered_df['gem5 stat workloads preset'].unique()
             print("ATTN: found multiple workloads from different workload presents ("+str(filtered_presets)+").")
             print("Choose which one you want to use:")
@@ -65,23 +73,25 @@ def combine_xu3_and_gem5(xu3_df, gem5_df, model):
             raw_input("Press <enter> to confirm (crtl-c to abort and start over)")
             if len(filtered_df.index) > 1:
                 raise ValueError("Multiple entries for the same workload.")
+            logging.info("Proceeding with user selection")
         #gem5_i = gem5_df.iloc[0].index
         #print("Gem5 index: "+str(gem5_i))
-        print("DF:")
-        print combined_df
+        #print("DF:")
+        #print combined_df
         temp_dict = {}
         for colname in xu3_df.columns.values:
             temp_dict[colname] = xu3_df[colname].iloc[xu3_i]
         for colname in filtered_df.columns.values:
             temp_dict[colname] = filtered_df[colname].iloc[0]
-        print("Length of temp list: "+str(len(temp_list)))
-        print ("number of keys in dict: "+str(len(temp_dict)))
+        #logger.info("Length of temp list: "+str(len(temp_list)))
+        logger.info("Number of columns: "+str(len(temp_dict)))
         import collections
-        print("fuplicates in list:")
-        print [item for item, count in collections.Counter(temp_list).items() if count > 1]
+        #print("fuplicates in list:")
+        logger.info("duplicates in lists: "+str( [item for item, count in collections.Counter(temp_list).items() if count > 1]))
         combined_df = combined_df.append(temp_dict, ignore_index=True)
         #combined_df = combined_df.append([xu3_df.iloc[xu3_i],filtered_df.iloc[0]], ignore_index=True)
-    print combined_df
+    #print combined_df
+    logger.info("Finished combining")
     return combined_df
         
     
@@ -100,7 +110,9 @@ if __name__=='__main__':
                required=False, \
                help="Name and location of output file")
     args=parser.parse_args()
+    logger.info("Opening gem5 DF ("+args.gem5_input_csv+")")
     gem5_input_df = pd.read_csv(args.gem5_input_csv,sep='\t')
+    logger.info("Opening HW DF ("+args.hw_input_csv+")")
     xu3_input_df = pd.read_csv(args.hw_input_csv,sep='\t')
 
     # rename headers
@@ -110,10 +122,11 @@ if __name__=='__main__':
     combined_df = combine_xu3_and_gem5(xu3_input_df, gem5_input_df, args.model)
     # rename the columns so the formulae works
     # apply formulae
+    logger.info("Saving combined DF...")
     if args.output_filepath:
         combined_df.to_csv(args.output_filepath,sep='\t')
+        logger.info("Saved to: "+args.output_filepath)
     else:
         combined_df.to_csv('results.csv',sep='\t')
-
-
-    
+        logger.info("Saved to: results.csv")
+    logger.info("Complete")
