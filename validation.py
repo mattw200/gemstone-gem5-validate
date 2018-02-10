@@ -752,33 +752,34 @@ if __name__=='__main__':
                help="Labels the core masks. E.g. 'a7' or 'a7#a15'")
     parser.add_argument('-g', '--gem5-cluster_labels',  dest='gem5_cluster_labels', required=True, \
                help="The gem5 cluster name labels E.g. 'littleCluster' or 'littleCluster#bigCluster'")
-    parser.add_argument('--wl-cluster-core-mask',  dest='workload_cluster_core_mask', required=False, \
+    parser.add_argument('--focsu--core-mask',  dest='workload_cluster_core_mask', required=False, \
                default='4,5,6,7', \
                help="Specifies the core mask to use for workload clustering")
-    parser.add_argument('--wl-cluster-freq',  dest='workload_cluster_freq', required=False, \
+    parser.add_argument('--focus-freq',  dest='workload_cluster_freq', required=False, \
                default=1000.0, \
                help="Specifies the CPU frequency (MHz) to use for workload clustering")
-    parser.add_argument('--wl-cluster-cluster-label',  dest='workload_cluster_cluster_label', required=False, \
+    parser.add_argument('--focus-cluster-label',  dest='workload_cluster_cluster_label', required=False, \
                default='a15', \
                help="Specifies the cluster (e.g. a15) to use for workload clustering")
     args=parser.parse_args()
+    # always clean!
+    print("Cleaning...")
+    clean_dir = os.path.dirname(args.input_file_path)
+    # check if input file is valid
+    if not os.path.isfile(args.input_file_path):
+        raise ValueError("The supplied input file ("+args.input_file_path+") does not exist!")
+    input_filename = (os.path.basename(args.input_file_path))
+    print("Removing all analysis files from "+clean_dir+" except "+input_filename)
+    files_to_delete = [x for x in os.listdir(clean_dir) if x != input_filename]
+    print("Not deleting: "+str([x for x in os.listdir(clean_dir) if x not in files_to_delete]))
+    print("DELETING: "+str(files_to_delete))
+    for f in files_to_delete:
+        del_path = os.path.join(clean_dir,f)
+        print("Deleting: "+del_path)
+        os.remove(del_path)
+    print("Finished clean") 
     if args.clean:
-        print("Cleaning...")
-        clean_dir = os.path.dirname(args.input_file_path)
-        # check if input file is valid
-        if not os.path.isfile(args.input_file_path):
-            raise ValueError("The supplied input file ("+args.input_file_path+") does not exist!")
-        input_filename = (os.path.basename(args.input_file_path))
-        print("Removing all analysis files from "+clean_dir+" except "+input_filename)
-        files_to_delete = [x for x in os.listdir(clean_dir) if x != input_filename]
-        print("Not deleting: "+str([x for x in os.listdir(clean_dir) if x not in files_to_delete]))
-        print("DELETING: "+str(files_to_delete))
-        for f in files_to_delete:
-            del_path = os.path.join(clean_dir,f)
-            print("Deleting: "+del_path)
-            os.remove(del_path)
         sys.exit(0)
-        
     df = pd.read_csv(args.input_file_path,sep='\t')
     convert_old_names_to_new(df)
     core_masks = args.core_mask.split('#')
@@ -843,6 +844,30 @@ if __name__=='__main__':
     df['workload clusters'] = df['hw stat workload name'].apply(lambda x: workload_clustering_df[workload_clustering_df['wl name'] == x][wl_cluster_name].iloc[0])
     print df
     df.to_csv(args.input_file_path+'-with-formulae-and-clusters.csv',sep='\t')
+    # create simple df with focus settings
+    settings_df = pd.DataFrame(columns=[
+        'input filename',
+        'number of workloads',
+        'coremask-freq settings',
+        'focus frequency (MHz)' ,
+        'focus core mask',
+        'focus cluster label'
+        ])
+    freq_cols = [x for x in df.columns.values if x.find('hw stat Freq (MHz)') > -1]
+    cols_to_unique = ['hw stat core mask'] + freq_cols
+    print (cols_to_unique)
+    #df['coremask freq'] = df.apply(lambda row: '-'.join([x+'_'+str(row[x]) for x in cols_to_unique]), axis=1)
+    df['coremask freq'] = df.apply(lambda row: '-'.join([str(row[x]) for x in cols_to_unique]), axis=1)
+    unique_coremask_freq = '  ##   '.join(df['coremask freq'].unique().tolist())
+    settings_df = settings_df.append({
+        'input filename' : args.input_file_path,
+        'number of workloads' : len(df['hw stat workload name'].unique().tolist()),
+        'coremask-freq settings' : str(unique_coremask_freq),
+        'focus frequency (MHz)' : str(args.workload_cluster_freq),
+        'focus core mask' : str(args.workload_cluster_core_mask),
+        'focus cluster label' : str(args.workload_cluster_cluster_label)
+    },ignore_index=True)
+    settings_df.to_csv(args.input_file_path+'-settings.csv', sep='\t') 
     for i in range(0, len(core_masks)):
         cur_core_mask = core_masks[i]
         cur_cluster_label = cluster_labels[i]
