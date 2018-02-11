@@ -681,7 +681,7 @@ def build_model(df, gem5_cluster,  y_col,var_select_func,num_inputs,filepath_pre
     temp_df =  temp_df._get_numeric_data().fillna(0)
     temp_df = temp_df.fillna(0)
     temp_df = temp_df.loc[:, (temp_df != 0).any(axis=0)] # remove 0 col
-    temp_df = temp_df.loc[:, (temp_df != temp_df.ix[0]).any()] 
+    #temp_df = temp_df.loc[:, (temp_df != temp_df.ix[0]).any()] 
     temp_df = temp_df[[x for x in temp_df.columns.values.tolist() if not 0 in temp_df[x].tolist() ]]
     temp_df['const'] = 1
     # get var names:
@@ -704,7 +704,11 @@ def build_model(df, gem5_cluster,  y_col,var_select_func,num_inputs,filepath_pre
             X = temp_df[dep_vars]
             y = temp_df[y_col]
             #X = sm.add_constant(X) # use const
-            res = sm.OLS(y,X).fit()
+            try:
+                res = sm.OLS(y,X).fit()
+            except:
+                logger.info("Failed when adding var: "+var)
+                continue
             r2 = res.rsquared 
             #print res.summary()
             if r2 > best_r2:
