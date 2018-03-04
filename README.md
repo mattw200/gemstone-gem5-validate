@@ -1,9 +1,8 @@
 # GemStone Gem5-Validate 
--------------------------
 
 This project analyses gem5 simulation data, combines it with data collected 
 from a hardware platform (e.g. collected with 
-[GemStone-Profiler-Automate](http://gemstone.ecs.soton.ac.uk)) and applies
+[GemStone-Profiler-Automate](https://github.com/mattw200/gemstone-profiler-automate)) and applies
  statistical techniques to observe the difference between the gem5 modle and 
  real hardware platform, and identify sources of errors in the model. 
  
@@ -24,7 +23,7 @@ Usage instructions and tutorials available at [GemStone](http://gemstone.ecs.sot
 
 
 ## Authors
-----------
+
 [Matthew J. Walker](mailto:mw9g09@ecs.soton.ac.uk) - [University of Southampton](https://www.southampton.ac.uk)
 
 This project supports the paper:
@@ -38,7 +37,7 @@ This work is supported by [Arm Research](https://developer.arm.com/research),
 
 
 ## License
-----------
+
 This project is licensed under the 3-clause BSD license. See LICENSE.md for details.
 
 
